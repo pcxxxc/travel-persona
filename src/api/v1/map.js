@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { getActiveProvider } = require('../../services/map/mapProvider');
+const { getActiveProvider, isBaiduProvider } = require('../../services/map/mapProvider');
 const { getCityByName } = require('../../data/cityRecords');
 const contentSafety = require('../../services/ops/contentSafety');
 const { bd09ToWgs84 } = require('../../services/map/coordinateSystems');
@@ -53,6 +53,14 @@ function normalizeDepartureDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`)) ? date : '';
 }
 
+function toWgs84(provider, location) {
+  if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return null;
+  if (provider.coordinateSystem === 'wgs84') {
+    return { lat: location.lat, lng: location.lng };
+  }
+  return bd09ToWgs84(location.lng, location.lat);
+}
+
 async function mapWithConcurrency(values, limit, mapper) {
   const output = new Array(values.length);
   let cursor = 0;
@@ -96,18 +104,19 @@ async function enrichCity(provider, name) {
     verified: false,
     source: 'snapshot'
   };
-  if (provider.name !== 'baidu') return fallback;
+  if (!isBaiduProvider(provider)) return fallback;
 
   try {
     const result = await provider.geocode(name);
     if (!result?.data || !Number.isFinite(result.data.lat) || !Number.isFinite(result.data.lng)) return fallback;
-    const wgs84 = bd09ToWgs84(result.data.lng, result.data.lat);
+    const wgs84 = toWgs84(provider, result.data);
+    if (!wgs84) return fallback;
     return {
       name,
       coordinates: { lat: wgs84.lat, lng: wgs84.lng },
       verified: true,
       source: result.source || 'baidu',
-      sourceCrs: 'bd09',
+      sourceCrs: provider.coordinateSystem || 'bd09',
       outputCrs: 'wgs84',
       fetchedAt: result.fetchedAt
     };
@@ -118,7 +127,7 @@ async function enrichCity(provider, name) {
 }
 
 async function enrichPoi(provider, request) {
-  if (provider.name !== 'baidu') {
+  if (!isBaiduProvider(provider)) {
     return { ...request, verified: false, source: 'snapshot' };
   }
 
@@ -136,9 +145,7 @@ async function enrichPoi(provider, request) {
       }
     }
     const merged = { ...match, ...(detail || {}) };
-    const wgs84 = Number.isFinite(merged.lat) && Number.isFinite(merged.lng)
-      ? bd09ToWgs84(merged.lng, merged.lat)
-      : null;
+    const wgs84 = toWgs84(provider, merged);
     return {
       city: request.city,
       name: request.name,
@@ -148,7 +155,7 @@ async function enrichPoi(provider, request) {
       openHours: merged.openHours || '',
       verified: true,
       source: search.source || 'baidu',
-      sourceCrs: 'bd09',
+      sourceCrs: provider.coordinateSystem || 'bd09',
       outputCrs: 'wgs84',
       fetchedAt: search.fetchedAt
     };
@@ -166,7 +173,7 @@ async function enrichTransitLeg(provider, request, departureDate) {
     source: 'snapshot',
     status: departureDate ? 'provider_unavailable' : 'date_required'
   };
-  if (provider.name !== 'baidu' || !departureDate) return fallback;
+  if (!isBaiduProvider(provider) || !departureDate) return fallback;
 
   try {
     const [origin, destination] = await Promise.all([
@@ -222,6 +229,15 @@ async function enrichTransitLeg(provider, request, departureDate) {
   }
 }
 
+router.get('/client-config', (req, res) => {
+  const baiduWebAk = String(process.env.BAIDU_WEB_AK || '').trim();
+  res.json({
+    country: 'CN',
+    displayProvider: baiduWebAk ? 'baidu-webgl' : 'route-fallback',
+    baiduWebAk: baiduWebAk || null
+  });
+});
+
 router.post('/enrich-plan', async (req, res) => {
   const cities = uniqueStrings(req.body?.cities, MAX_CITIES);
   const pois = normalizePoiRequests(req.body?.pois);
@@ -245,7 +261,7 @@ router.post('/enrich-plan', async (req, res) => {
   const verifiedCities = cityFacts.filter(item => item.verified).length;
   const verifiedPois = poiFacts.filter(item => item.verified).length;
   const verifiedTransitLegs = transitFacts.filter(item => item.verified).length;
-  const mapFreshness = provider.name === 'baidu' && (verifiedCities > 0 || verifiedPois > 0)
+  const mapFreshness = isBaiduProvider(provider) && (verifiedCities > 0 || verifiedPois > 0)
     ? 'live'
     : 'snapshot';
 
@@ -255,6 +271,7 @@ router.post('/enrich-plan', async (req, res) => {
 
   res.json(contentSafety.sanitizeOutputValue({
     mapFreshness,
+    mapProvider: provider.name,
     cities: cityFacts,
     pois: poiFacts,
     transitLegs: transitFacts,

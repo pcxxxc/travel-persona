@@ -157,7 +157,8 @@
     }
     result.capability = Object.assign({}, result.capability, {
       mapFreshness: enrichment.mapFreshness === 'live' ? 'live' : result.capability?.mapFreshness,
-      transitFreshness: enrichment.transitFreshness
+      transitFreshness: enrichment.transitFreshness,
+      mapProvider: enrichment.mapProvider || result.capability?.mapProvider
     });
     result.realTimeData = Object.assign({}, result.realTimeData, {
       mapEvidence: {
@@ -165,6 +166,7 @@
         verifiedPois: enrichment.verifiedPois || 0,
         verifiedTransitLegs: enrichment.verifiedTransitLegs || 0,
         transitFreshness: enrichment.transitFreshness,
+        mapProvider: enrichment.mapProvider || '',
         checkedAt: enrichment.checkedAt
       }
     });

@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 
 APP_DIR="/opt/travel-persona"
 REPO_URL="https://github.com/pcxxxc/travel-persona.git"
-NODE_VERSION="20"
+NODE_VERSION="24"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  旅格 Travel Persona · 服务器部署${NC}"
@@ -36,13 +36,17 @@ echo -e "${GREEN}  ✓ 系统依赖安装完成${NC}"
 # 2. Node.js
 # ============================================================
 echo -e "${YELLOW}[2/7] 检查/安装 Node.js ${NODE_VERSION}...${NC}"
-if ! command -v node &> /dev/null || [[ $(node -v | cut -d. -f1 | tr -d 'v') -lt 18 ]]; then
+if ! command -v node &> /dev/null || ! node -e "const [major, minor] = process.versions.node.split('.').map(Number); process.exit(major > 22 || (major === 22 && minor >= 5) ? 0 : 1)"; then
     curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - > /dev/null 2>&1
     apt-get install -y -qq nodejs > /dev/null 2>&1
     echo -e "${GREEN}  ✓ Node.js $(node -v) 已安装${NC}"
 else
     echo -e "${GREEN}  ✓ Node.js $(node -v) 已存在${NC}"
 fi
+node -e "const [major, minor] = process.versions.node.split('.').map(Number); process.exit(major > 22 || (major === 22 && minor >= 5) ? 0 : 1)" || {
+    echo -e "${RED}  ✗ Node.js must be 22.5 or newer${NC}"
+    exit 1
+}
 
 # ============================================================
 # 3. PM2
@@ -75,7 +79,11 @@ echo -e "${GREEN}  ✓ 代码已就绪 ($(git rev-parse --short HEAD))${NC}"
 # ============================================================
 echo -e "${YELLOW}[5/7] 安装 Node 依赖...${NC}"
 cd "$APP_DIR"
-npm install --production --no-audit --no-fund 2>&1 | tail -3
+npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+(
+    cd "$APP_DIR/mcp-servers/baidu-map"
+    npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+)
 echo -e "${GREEN}  ✓ 依赖安装完成${NC}"
 
 # ============================================================

@@ -8,6 +8,7 @@
  */
 
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 const { bd09ToWgs84, wgs84ToBd09 } = require('./coordinateSystems');
 
@@ -171,9 +172,12 @@ class McpMapProvider {
     this._cache = new Map();
     this.providerName = 'mcp-baidu';
     this.coverageTier = 'national';
+    // This provider normalizes every MCP response to WGS-84 before returning it.
+    this.coordinateSystem = 'wgs84';
 
     // MCP Server 路径
     this._serverPath = path.resolve(__dirname, '..', '..', '..', 'mcp-servers', 'baidu-map', 'src', 'index.js');
+    this._runtimePath = path.resolve(__dirname, '..', '..', '..', 'mcp-servers', 'baidu-map', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
     this._env = {
       BAIDU_MAP_AK: process.env.BAIDU_MAP_AK || process.env.BAIDU_MAP_API_KEY || '',
       BAIDU_MAP_SK: process.env.BAIDU_MAP_SK || '',
@@ -183,7 +187,17 @@ class McpMapProvider {
   }
 
   isConfigured() {
-    return Boolean(this._env.BAIDU_MAP_AK);
+    return Boolean(this._env.BAIDU_MAP_AK)
+      && fs.existsSync(this._serverPath)
+      && fs.existsSync(this._runtimePath);
+  }
+
+  getStatus() {
+    return {
+      configured: Boolean(this._env.BAIDU_MAP_AK),
+      serverPresent: fs.existsSync(this._serverPath),
+      dependenciesInstalled: fs.existsSync(this._runtimePath)
+    };
   }
 
   get name() {
@@ -212,7 +226,7 @@ class McpMapProvider {
 
       let data = null;
       if (result && result.lat != null && result.lng != null) {
-        const wgs = bd09ToWgs84(result.lat, result.lng);
+        const wgs = bd09ToWgs84(result.lng, result.lat);
         data = {
           lat: wgs.lat,
           lng: wgs.lng,
@@ -276,7 +290,7 @@ class McpMapProvider {
         let lat = item.location?.lat;
         let lng = item.location?.lng;
         if (lat != null && lng != null) {
-          const wgs = bd09ToWgs84(lat, lng);
+          const wgs = bd09ToWgs84(lng, lat);
           lat = wgs.lat;
           lng = wgs.lng;
         }
@@ -316,14 +330,29 @@ class McpMapProvider {
         scope: 2,
       });
 
-      if (result?.location) {
-        const wgs = bd09ToWgs84(result.location.lat, result.location.lng);
-        result.location.lat = wgs.lat;
-        result.location.lng = wgs.lng;
+      let data = null;
+      if (result) {
+        let lat = result.location?.lat;
+        let lng = result.location?.lng;
+        if (lat != null && lng != null) {
+          const wgs = bd09ToWgs84(lng, lat);
+          lat = wgs.lat;
+          lng = wgs.lng;
+        }
+        data = {
+          id: result.uid || poiId,
+          name: result.name || '',
+          lat,
+          lng,
+          address: result.address || '',
+          telephone: result.telephone || '',
+          openHours: result.detail_info?.open_hours || result.detail_info?.shop_hours || '',
+          type: result.detail_info?.type || ''
+        };
       }
 
-      if (result) this._cache.set(cacheKey, result);
-      return wrapResult(result, 'mcp-baidu');
+      if (data) this._cache.set(cacheKey, data);
+      return wrapResult(data, 'mcp-baidu');
     } catch (error) {
       return wrapResult(null, 'mcp-baidu:error', error);
     }
@@ -334,7 +363,10 @@ class McpMapProvider {
       return wrapResult(null, 'mcp-baidu:unconfigured', new Error('MCP 百度地图未配置 AK'));
     }
 
-    const cacheKey = `route:${mode}:${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
+    const routeOptions = mode === 'transit'
+      ? `${options.departureDate || ''}:${options.departureTime || ''}:${options.tacticsIncity ?? 1}:${options.tacticsIntercity ?? 0}:${options.transTypeIntercity ?? 0}`
+      : String(options.tactics ?? '');
+    const cacheKey = `route:${mode}:${origin.lat},${origin.lng}:${destination.lat},${destination.lng}:${routeOptions}`;
     const cached = this._cache.get(cacheKey);
     if (cached) return wrapResult(cached, 'mcp-baidu', null, true);
 
@@ -349,15 +381,30 @@ class McpMapProvider {
         dest_lat: bdDest.lat,
         dest_lng: bdDest.lng,
         mode,
-        region: options.city,
-        tactics: options.tactics,
+        region: options.region || options.city,
+        tactics: mode === 'transit' ? (options.tacticsIncity ?? 1) : options.tactics,
+        tactics_intercity: options.tacticsIntercity,
+        trans_type_intercity: options.transTypeIntercity,
+        departure_date: options.departureDate,
+        departure_time: options.departureTime,
+        page_size: options.pageSize,
       });
 
       const data = result ? {
-        distance: result.total_distance,
-        duration: result.total_duration,
+        distance: result.total_distance || result.routes?.[0]?.distance || 0,
+        duration: result.total_duration || result.routes?.[0]?.duration || 0,
         mode: result.mode,
         routes: result.routes,
+        alternatives: mode === 'transit'
+          ? (result.routes || []).map(route => ({
+            distance: Number(route.distance) || 0,
+            duration: Number(route.duration) || 0,
+            price: Number(route.price) || 0,
+            transfers: Number(route.transfers) || 0,
+            vehicles: Array.isArray(route.vehicles) ? route.vehicles : [],
+            steps: Array.isArray(route.steps) ? route.steps : []
+          }))
+          : []
       } : null;
 
       if (data) this._cache.set(cacheKey, data);

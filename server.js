@@ -34,7 +34,7 @@ const contentSafety = require('./src/services/ops/contentSafety');
 const semanticContentSafety = require('./src/services/ops/semanticContentSafety');
 const { getAgentProvider, runWithAgent, ALLOWED_PATHS } = require('./src/services/agent/agentProvider');
 const { applyPatch } = require('./src/services/agent/structuredPatch');
-const { getActiveProvider } = require('./src/services/map/mapProvider');
+const { getActiveProvider, isBaiduProvider } = require('./src/services/map/mapProvider');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -91,10 +91,10 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://api.map.baidu.com https://mapopen-pub-jsapi.bj.bcebos.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://online*.map.bdimg.com https://api*.map.bdimg.com https://shangetu*.map.bdimg.com",
-    "connect-src 'self'",
+    "img-src 'self' data: https://*.bdimg.com https://*.baidu.com https://*.bcebos.com",
+    "connect-src 'self' https://*.baidu.com https://*.bdimg.com https://*.bcebos.com",
     "font-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
@@ -181,7 +181,9 @@ app.get('/health', (req, res) => {
     identity: getIdentityStatus(),
     map: {
       provider: activeMapProvider.name,
-      freshness: activeMapProvider.name === 'baidu' ? 'live' : 'snapshot'
+      freshness: isBaiduProvider(activeMapProvider) ? 'live' : 'snapshot',
+      browserMap: process.env.BAIDU_WEB_AK ? 'baidu-webgl' : 'route-fallback',
+      mcp: typeof activeMapProvider.getStatus === 'function' ? activeMapProvider.getStatus() : null
     },
     contentSafety: semanticContentSafety.getStatus(),
     llm: {

@@ -14,7 +14,6 @@
  */
 
 const { NetworkError } = require('../../utils/errors');
-const nominatimProvider = require('./nominatimProvider');
 const { McpMapProvider } = require('./mcpMapProvider');
 
 // ========== 常量配置 ==========
@@ -196,6 +195,7 @@ class TtlCache {
 class MapProvider {
   constructor(name) {
     this.name = name;
+    this.coordinateSystem = 'wgs84';
     this._cache = new TtlCache();
   }
 
@@ -337,6 +337,8 @@ function parseBaiduTransitRoutes(routes) {
 class BaiduMapProvider extends MapProvider {
   constructor() {
     super('baidu');
+    // Baidu Web Service API returns BD-09 coordinates. Consumers convert once.
+    this.coordinateSystem = 'bd09';
     this.apiKey = process.env.BAIDU_MAP_API_KEY || '';
     this.apiBase = BAIDU_API_BASE;
     if (!this.apiKey) {
@@ -428,7 +430,7 @@ class BaiduMapProvider extends MapProvider {
         params.set('trans_type_intercity', String(options.transTypeIntercity ?? 0));
         params.set('page_size', String(options.pageSize || 3));
         params.set('page_index', '1');
-        if (options.departureDate) params.set('departure_date', String(options.departureDate));
+        if (options.departureDate) params.set('departure_date', String(options.departureDate).replace(/-/g, ''));
         if (options.departureTime) params.set('departure_time', String(options.departureTime));
       }
 
@@ -488,19 +490,8 @@ class BaiduMapProvider extends MapProvider {
   }
 
   async geocode(address) {
-    // 未配置百度 Key 时，降级到 Nominatim（免Key多源策略）
     if (!this.isConfigured()) {
-      const results = await nominatimProvider.geocode(address);
-      if (results.length > 0) {
-        const r = results[0];
-        return wrapResult({
-          lat: r.lat,
-          lng: r.lng,
-          sourceName: r.displayName,
-          precise: true
-        }, r.source, false);
-      }
-      return wrapResult(null, 'none', false);
+      return wrapResult(null, 'baidu:unconfigured', false);
     }
 
     return this._cachedCall(`geocode:${address}`, async () => {
@@ -523,19 +514,8 @@ class BaiduMapProvider extends MapProvider {
   }
 
   async reverseGeocode(lat, lng) {
-    // 未配置百度 Key 时，降级到 Nominatim
     if (!this.isConfigured()) {
-      const result = await nominatimProvider.reverseGeocode(lat, lng);
-      if (result) {
-        return wrapResult({
-          address: result.displayName,
-          province: '',
-          city: '',
-          district: '',
-          street: ''
-        }, result.source, false);
-      }
-      return wrapResult(null, 'none', false);
+      return wrapResult(null, 'baidu:unconfigured', false);
     }
 
     return this._cachedCall(`reverse:${lat},${lng}`, async () => {
@@ -769,6 +749,10 @@ class MockMapProvider extends MapProvider {
 /** 已实例化的 Provider 单例缓存 */
 let _activeProvider = null;
 
+function isBaiduProvider(provider) {
+  return provider && (provider.name === 'baidu' || provider.name === 'mcp-baidu');
+}
+
 /**
  * 根据环境变量获取当前活跃的地图 Provider
  *
@@ -823,10 +807,12 @@ module.exports = {
   // 基类与实现
   MapProvider,
   BaiduMapProvider,
+  McpMapProvider,
   MockMapProvider,
   // 工厂
   getActiveProvider,
   resetProvider,
+  isBaiduProvider,
   // 工具函数（供 routeSolver 等模块复用）
   haversineDistance,
   wrapResult,

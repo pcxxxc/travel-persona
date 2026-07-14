@@ -14,6 +14,8 @@ assert.ok(!/^COPY\s+(?:--chown=\S+\s+)?\.\s+\.$/m.test(dockerfile), '镜像不�
 assert.match(dockerfile, /COPY --chown=node:node server\.js \./);
 assert.match(dockerfile, /COPY --chown=node:node src \.\/src/);
 assert.match(dockerfile, /COPY --chown=node:node public-app \.\/public-app/);
+assert.match(dockerfile, /COPY mcp-servers\/baidu-map\/package\.json mcp-servers\/baidu-map\/package-lock\.json/);
+assert.match(dockerfile, /COPY --chown=node:node mcp-servers\/baidu-map\/src/);
 assert.ok(dockerfile.includes('/app/backups'), '镜像必须准备独立备份目录');
 assert.ok(fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8').includes('travel_persona_backups:/app/backups'), 'Compose 必须挂载独立备份卷');
 
@@ -22,9 +24,13 @@ for (const legacyPath of ['public-site', 'travel7.9', 'travel-persona', 'artifac
 }
 
 assert.ok(!dockerignore.includes('*.html'), '不能排除用户端 index.html');
-assert.ok(!dockerignore.includes('*.png'), '不能排除 Leaflet 标记图片');
 assert.ok(fs.existsSync(path.join(root, 'public-app', 'index.html')));
-assert.ok(fs.existsSync(path.join(root, 'public-app', 'vendor', 'leaflet', 'images', 'marker-icon.png')));
+assert.ok(fs.existsSync(path.join(root, 'public-app', 'map-client.js')));
+const appIndex = fs.readFileSync(path.join(root, 'public-app', 'index.html'), 'utf8');
+const mapClient = fs.readFileSync(path.join(root, 'public-app', 'map-client.js'), 'utf8');
+assert.ok(appIndex.includes('map-client.js'), '用户端必须加载国内地图客户端');
+assert.ok(!appIndex.includes('leaflet'), '用户端不得加载 Leaflet 或外部瓦片依赖');
+assert.ok(!mapClient.includes('openstreetmap.org'), '用户端不得回退到 OpenStreetMap');
 
 const runtimeSources = [
   path.join(root, 'src', 'data', 'cityRecords.js'),

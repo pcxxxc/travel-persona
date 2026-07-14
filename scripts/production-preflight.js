@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config();
+
 const fs = require('fs');
 const path = require('path');
 
@@ -37,13 +39,19 @@ if (!Number.isFinite(telemetryRateLimit) || telemetryRateLimit < 5 || telemetryR
 }
 
 const mapProvider = String(process.env.MAP_PROVIDER || 'mock').toLowerCase();
-if (!['mock', 'baidu'].includes(mapProvider)) failures.push('MAP_PROVIDER must be mock or baidu');
+if (!['mock', 'baidu', 'mcp-baidu'].includes(mapProvider)) failures.push('MAP_PROVIDER must be mock, baidu, or mcp-baidu');
 if (mapProvider === 'baidu' && !process.env.BAIDU_MAP_API_KEY) {
   failures.push('BAIDU_MAP_API_KEY is required when MAP_PROVIDER=baidu');
 }
+if (mapProvider === 'mcp-baidu' && !process.env.BAIDU_MAP_AK) {
+  failures.push('BAIDU_MAP_AK is required when MAP_PROVIDER=mcp-baidu');
+}
+if (mapProvider !== 'mock' && !process.env.BAIDU_WEB_AK) {
+  failures.push('BAIDU_WEB_AK is required for the domestic browser map');
+}
 if (mapProvider === 'mock') warnings.push('Map provider is still in fallback mode');
-if (launchTier === 'public' && mapProvider !== 'baidu') {
-  failures.push('MAP_PROVIDER must be baidu when LAUNCH_TIER=public');
+if (launchTier === 'public' && !['baidu', 'mcp-baidu'].includes(mapProvider)) {
+  failures.push('MAP_PROVIDER must be baidu or mcp-baidu when LAUNCH_TIER=public');
 }
 if (!process.env.AGENT_PROVIDER) warnings.push('Agent enhancement is disabled; the local planner will remain active');
 

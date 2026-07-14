@@ -387,6 +387,7 @@
       : [];
     var mapIsLive = result.capability?.mapFreshness === 'live';
     var transitIsLive = result.capability?.transitFreshness === 'live';
+    var mapProvider = result.capability?.mapProvider || '';
     var note = isRoute
       ? (transitIsLive ? '城市、关键地点和跨城交通已按出发日期核验；最终车次与价格仍以出票页为准。' : mapIsLive ? '城市与关键地点已由地图服务核验；车次和票价仍需在出发前确认。' : '地图用于判断方向和绕行，具体车次与耗时需在出发前再次校验。')
       : (mapIsLive ? '目的地坐标已由地图服务核验，距离会继续参与方案比较。' : '距离会参与现实平衡与低成本方案，不再只按城市标签排序。');
@@ -395,7 +396,7 @@
         el('div', {}, [
           el('div', { className: 'map-section__title-row' }, [
             el('h2', { id: 'plan-map-title', className: 'sampling-title', textContent: isRoute ? '整条路线放在地图上' : '先看这三个选择在哪里' }),
-            mapIsLive ? el('span', { className: 'tag map-section__verified', textContent: '地图地点已核验' }) : null
+            mapIsLive ? el('span', { className: 'tag map-section__verified', textContent: mapProvider === 'mcp-baidu' ? '百度地图已核验' : '地图地点已核验' }) : null
           ]),
           el('p', { className: 'sampling-note', textContent: note })
         ]),
@@ -413,14 +414,7 @@
 
   // ========== 瓦片层配置 ==========
 
-  var TILE_SOURCES = [
-    {
-      name: 'OpenStreetMap',
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      subdomains: 'abc',
-      attribution: '&copy; OpenStreetMap contributors'
-    }
-  ];
+  var TILE_SOURCES = [];
 
   function createTileLayer(map, onSourceChange) {
     var sourceIndex = 0;
@@ -484,9 +478,12 @@
 
   // ========== 主地图初始化 ==========
   function initPlanMap(result) {
-    if (!global.L) return;
     var mapElement = document.getElementById('plan-map');
     if (!mapElement) return;
+    if (!global.TravelMap) {
+      mapElement.querySelector('.plan-map__fallback').textContent = '国内地图组件暂未加载。';
+      return;
+    }
 
     if (activePlanMapResizeHandler) {
       global.removeEventListener('resize', activePlanMapResizeHandler);
@@ -523,6 +520,19 @@
       mapElement.querySelector('.plan-map__fallback').textContent = '这组结果暂时缺少可验证坐标。';
       return;
     }
+
+    var mapOrigin = null;
+    if (!isMultiCity && state.plan && state.plan.tripContext && state.plan.tripContext.origin) {
+      var firstDecisionPath = (result.decisionPaths || [])[0];
+      if (firstDecisionPath && firstDecisionPath.originCoordinates) {
+        mapOrigin = {
+          name: state.plan.tripContext.origin,
+          coordinates: firstDecisionPath.originCoordinates
+        };
+      }
+    }
+    global.TravelMap.renderPlan(mapElement, points, mapOrigin, isMultiCity);
+    return;
 
     mapElement.innerHTML = '';
     var map = global.L.map(mapElement, {
@@ -653,9 +663,11 @@
 
   // ========== 每日迷你地图初始化 ==========
   function initDayMiniMap(containerId, pois, cityCenter) {
-    if (!global.L) return;
+    if (!global.TravelMap) return;
     var container = document.getElementById(containerId);
     if (!container) return;
+    global.TravelMap.renderDay(container, pois, cityCenter);
+    return;
 
     var center = cityCenter && cityCenter.lat != null
       ? [cityCenter.lat, cityCenter.lng]

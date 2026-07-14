@@ -148,6 +148,7 @@ const validPublic = spawnSync(process.execPath, [script], {
     ENABLE_LEGACY_API: 'false',
     MAP_PROVIDER: 'baidu',
     BAIDU_MAP_API_KEY: 'baidu-map-key-for-production',
+    BAIDU_WEB_AK: 'baidu-browser-key-for-production',
     CONTENT_SAFETY_MODE: 'provider',
     CONTENT_SAFETY_PROVIDER_URL: 'https://safety.example.com/check',
     CONTENT_SAFETY_PROVIDER_KEY: 'content-safety-provider-key-long',
@@ -157,5 +158,26 @@ const validPublic = spawnSync(process.execPath, [script], {
 });
 assert.strictEqual(validPublic.status, 0, validPublic.stderr);
 assert.match(validPublic.stdout, /passed for public launch/);
+
+const validMcp = spawnSync(process.execPath, [script], {
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    SESSION_SECRET: 'session-secret-longer-than-thirty-two-characters',
+    OPS_API_KEY: 'operations-secret-longer-than-thirty-two-characters',
+    ALLOWED_ORIGINS: 'https://travel.example.com',
+    SESSION_COOKIE_SECURE: 'true',
+    LAUNCH_TIER: 'beta',
+    IDENTITY_MODE: 'guest',
+    ENABLE_LEGACY_API: 'false',
+    MAP_PROVIDER: 'mcp-baidu',
+    BAIDU_MAP_AK: 'baidu-mcp-key-for-production',
+    BAIDU_WEB_AK: 'baidu-browser-key-for-production',
+    CONTENT_SAFETY_MODE: 'local',
+    TP_DATABASE_PATH: path.join(os.tmpdir(), 'travel-persona-preflight', 'mcp.sqlite')
+  }
+});
+assert.strictEqual(validMcp.status, 0, validMcp.stderr);
+assert.match(validMcp.stdout, /passed for beta launch/);
 
 console.log('Production preflight tests passed.');

@@ -38,6 +38,20 @@ function gcj02ToWgs84(lng, lat) {
   return { lng: lng * 2 - (lng + dLng), lat: lat * 2 - (lat + dLat) };
 }
 
+function wgs84ToGcj02(lng, lat) {
+  if (outOfChina(lng, lat)) return { lng, lat };
+  const dLat = transformLat(lng - 105, lat - 35);
+  const dLng = transformLng(lng - 105, lat - 35);
+  const radLat = lat / 180 * PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - EE * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  return {
+    lng: lng + dLng * 180 / (A / sqrtMagic * Math.cos(radLat) * PI),
+    lat: lat + dLat * 180 / ((A * (1 - EE)) / (magic * sqrtMagic) * PI)
+  };
+}
+
 function bd09ToGcj02(lng, lat) {
   const x = lng - 0.0065;
   const y = lat - 0.006;
@@ -46,14 +60,29 @@ function bd09ToGcj02(lng, lat) {
   return { lng: z * Math.cos(theta), lat: z * Math.sin(theta) };
 }
 
+function gcj02ToBd09(lng, lat) {
+  const z = Math.sqrt(lng * lng + lat * lat) + 0.00002 * Math.sin(lat * X_PI);
+  const theta = Math.atan2(lat, lng) + 0.000003 * Math.cos(lng * X_PI);
+  return { lng: z * Math.cos(theta) + 0.0065, lat: z * Math.sin(theta) + 0.006 };
+}
+
 function bd09ToWgs84(lng, lat) {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
   const gcj = bd09ToGcj02(lng, lat);
   return gcj02ToWgs84(gcj.lng, gcj.lat);
 }
 
+function wgs84ToBd09(lat, lng) {
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  const gcj = wgs84ToGcj02(lng, lat);
+  return gcj02ToBd09(gcj.lng, gcj.lat);
+}
+
 module.exports = {
   bd09ToGcj02,
+  gcj02ToBd09,
   gcj02ToWgs84,
-  bd09ToWgs84
+  wgs84ToGcj02,
+  bd09ToWgs84,
+  wgs84ToBd09
 };

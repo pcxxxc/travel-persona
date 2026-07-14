@@ -7,6 +7,56 @@
 import { z } from 'zod';
 import { callBaiduApi } from '../baiduApiClient.js';
 
+function collectTransitVehicles(value, output = []) {
+  if (Array.isArray(value)) {
+    value.forEach(item => collectTransitVehicles(item, output));
+    return output;
+  }
+  if (!value || typeof value !== 'object') return output;
+  if (value.vehicle_info && typeof value.vehicle_info === 'object') {
+    const info = value.vehicle_info;
+    const detail = info.detail && typeof info.detail === 'object' ? info.detail : {};
+    output.push({
+      type: Number(info.type) || 0,
+      name: detail.name || '',
+      price: Number(detail.price) || 0,
+      departureStation: detail.departure_station || detail.start_info?.start_name || '',
+      arrivalStation: detail.arrive_station || detail.end_info?.end_name || '',
+      departureTime: detail.departure_time || detail.start_info?.start_time || '',
+      arrivalTime: detail.arrive_time || detail.end_info?.end_time || ''
+    });
+  }
+  ['steps', 'schemes', 'sub_steps'].forEach(key => {
+    if (value[key]) collectTransitVehicles(value[key], output);
+  });
+  return output;
+}
+
+function formatRoute(route, index, mode) {
+  const vehicles = mode === 'transit' ? collectTransitVehicles(route.steps || []) : [];
+  const intercityVehicles = vehicles.filter(vehicle => [1, 2, 6].includes(vehicle.type));
+  return {
+    route_index: index,
+    distance: Number(route.distance) || 0,
+    duration: Number(route.duration) || 0,
+    arrive_time: route.arrive_time || '',
+    price: Number(route.price) || intercityVehicles.reduce((sum, vehicle) => sum + vehicle.price, 0),
+    transfers: Math.max(0, intercityVehicles.length - 1),
+    vehicles,
+    traffic_condition: route.traffic_condition,
+    toll: route.toll,
+    steps: (route.steps || []).map(step => ({
+      instruction: step.instructions || step.instruction || '',
+      distance: Number(step.distance) || 0,
+      duration: Number(step.duration) || 0,
+      path: step.path,
+      turn: step.turn,
+      road_name: step.road_name,
+      step_distance: step.step_distance
+    }))
+  };
+}
+
 /**
  * 注册路线规划相关工具
  * @param {import('@modelcontextprotocol/sdk').McpServer} server
@@ -25,10 +75,15 @@ export function registerDirectionTools(server) {
       waypoints: z.string().optional().describe('途经点，格式 "lat,lng|lat,lng"，仅 driving 模式支持'),
       region: z.string().optional().describe('城市名称，transit 模式必填，如"北京"'),
       tactics: z.number().int().optional().describe('路线偏好：0=默认，3=不走高速，4=高速优先，5=躲避拥堵'),
+      tactics_intercity: z.number().int().optional().describe('跨城交通策略'),
+      trans_type_intercity: z.number().int().optional().describe('跨城交通工具类型'),
+      departure_date: z.string().optional().describe('出发日期，YYYY-MM-DD'),
+      departure_time: z.string().optional().describe('出发时间段'),
+      page_size: z.number().int().min(1).max(10).optional().describe('返回方案数量'),
     },
-    async ({ origin_lat, origin_lng, dest_lat, dest_lng, mode, waypoints, region, tactics }) => {
-      const origin = `${origin_lng},${origin_lat}`;
-      const destination = `${dest_lng},${dest_lat}`;
+    async ({ origin_lat, origin_lng, dest_lat, dest_lng, mode, waypoints, region, tactics, tactics_intercity, trans_type_intercity, departure_date, departure_time, page_size }) => {
+      const origin = `${origin_lat},${origin_lng}`;
+      const destination = `${dest_lat},${dest_lng}`;
 
       let path;
       const params = {
@@ -46,8 +101,14 @@ export function registerDirectionTools(server) {
       } else if (mode === 'transit') {
         path = '/direction/v2/transit';
         if (region) params.region = region;
-        // 市内公交策略：0=快速，1=少换乘，2=少步行，3=不坐地铁
         if (tactics != null) params.tactics_incity = tactics;
+        if (tactics_intercity != null) params.tactics_intercity = tactics_intercity;
+        if (trans_type_intercity != null) params.trans_type_intercity = trans_type_intercity;
+        if (departure_date) params.departure_date = String(departure_date).replace(/-/g, '');
+        if (departure_time) params.departure_time = departure_time;
+        if (page_size != null) params.page_size = page_size;
+        params.coord_type = 'bd09ll';
+        params.ret_coordtype = 'bd09ll';
       } else {
         throw new Error(`不支持的出行方式: ${mode}`);
       }
@@ -57,30 +118,7 @@ export function registerDirectionTools(server) {
       const result = data.result || {};
       const routes = result.routes || [];
 
-      const formattedRoutes = routes.map((route, idx) => {
-        const steps = [];
-        if (route.steps) {
-          for (const step of route.steps) {
-            steps.push({
-              instruction: step.instruction,
-              distance: step.distance,
-              duration: step.duration,
-              path: step.path,
-              turn: step.turn,
-              road_name: step.road_name,
-              step_distance: step.step_distance,
-            });
-          }
-        }
-        return {
-          route_index: idx,
-          distance: route.distance,
-          duration: route.duration,
-          traffic_condition: route.traffic_condition,
-          toll: route.toll,
-          steps,
-        };
-      });
+      const formattedRoutes = routes.map((route, idx) => formatRoute(route, idx, mode));
 
       return {
         content: [
@@ -168,6 +206,11 @@ export const directionTools = [
         waypoints: { type: 'string', description: '途经点，格式 "lat,lng|lat,lng"（仅 driving）' },
         region: { type: 'string', description: '城市名称（transit 模式必填）' },
         tactics: { type: 'number', description: '路线偏好' },
+        tactics_intercity: { type: 'number', description: '跨城交通策略' },
+        trans_type_intercity: { type: 'number', description: '跨城交通工具类型' },
+        departure_date: { type: 'string', description: '出发日期，YYYY-MM-DD' },
+        departure_time: { type: 'string', description: '出发时间段' },
+        page_size: { type: 'number', description: '返回方案数量' },
       },
       required: ['origin_lat', 'origin_lng', 'dest_lat', 'dest_lng', 'mode'],
     },

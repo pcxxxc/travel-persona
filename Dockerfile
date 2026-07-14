@@ -6,9 +6,13 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
+COPY mcp-servers/baidu-map/package.json mcp-servers/baidu-map/package-lock.json ./mcp-servers/baidu-map/
+RUN cd mcp-servers/baidu-map && npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
 COPY --chown=node:node server.js ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node public-app ./public-app
+COPY --chown=node:node mcp-servers/baidu-map/src ./mcp-servers/baidu-map/src
 RUN mkdir -p /app/.data /app/backups && chown -R node:node /app/.data /app/backups
 
 USER node
