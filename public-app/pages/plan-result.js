@@ -412,6 +412,83 @@
     ]);
   }
 
+  // ========== 瓦片层配置（中文优先 + 免Key降级）==========
+  var TILE_SOURCES = [
+    {
+      name: '高德',
+      url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+      subdomains: '1234',
+      attribution: '&copy; 高德地图'
+    },
+    {
+      name: 'OpenStreetMap',
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      subdomains: 'abc',
+      attribution: '&copy; OpenStreetMap contributors'
+    }
+  ];
+
+  function createTileLayer(map, onSourceChange) {
+    var sourceIndex = 0;
+    var errorCount = 0;
+    var errorTimer = null;
+    var currentLayer = null;
+
+    function trySource(index) {
+      if (index >= TILE_SOURCES.length) {
+        index = TILE_SOURCES.length - 1;
+      }
+      sourceIndex = index;
+      var src = TILE_SOURCES[index];
+      if (currentLayer) {
+        map.removeLayer(currentLayer);
+      }
+      currentLayer = global.L.tileLayer(src.url, {
+        maxZoom: 18,
+        attribution: src.attribution,
+        subdomains: src.subdomains
+      });
+      currentLayer.on('tileerror', function () {
+        errorCount++;
+        if (!errorTimer) {
+          errorTimer = setTimeout(function () {
+            if (errorCount >= 3 && sourceIndex < TILE_SOURCES.length - 1) {
+              trySource(sourceIndex + 1);
+            }
+            errorCount = 0;
+            errorTimer = null;
+          }, 3000);
+        }
+      });
+      currentLayer.addTo(map);
+      if (onSourceChange) onSourceChange(src.name);
+    }
+
+    trySource(0);
+    return { currentLayer: currentLayer, getSourceName: function () { return TILE_SOURCES[sourceIndex].name; } };
+  }
+
+  // ========== Haversine 距离计算 ==========
+  function haversineDistance(lat1, lng1, lat2, lng2) {
+    var R = 6371;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function estimateTransitTime(distanceKm) {
+    return {
+      driving: { timeMin: Math.round(distanceKm / 40 * 60), label: '约' + Math.round(distanceKm / 40 * 10) / 10 + '小时' },
+      walking: { timeMin: Math.round(distanceKm / 5 * 60), label: '约' + Math.round(distanceKm / 5 * 10) / 10 + '小时' },
+      transit: { timeMin: Math.round(distanceKm / 25 * 60), label: '约' + Math.round(distanceKm / 25 * 10) / 10 + '小时' }
+    };
+  }
+
+  // ========== 主地图初始化 ==========
   function initPlanMap(result) {
     if (!global.L) return;
     var mapElement = document.getElementById('plan-map');
@@ -430,8 +507,9 @@
       activePlanMap = null;
     }
 
+    var isMultiCity = !!result.multiCityPlan;
     var points = [];
-    if (result.multiCityPlan) {
+    if (isMultiCity) {
       var selectedRoute = getSelectedRouteVariant(result.multiCityPlan);
       (selectedRoute?.nodes || []).forEach(function (node) {
         if (!node.coordinates) return;
@@ -459,40 +537,112 @@
       attributionControl: true
     });
     activePlanMap = map;
-    global.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+
+    // 瓦片层 + 来源标签
+    var sourceLabel = null;
+    var tileManager = createTileLayer(map, function (name) {
+      if (!sourceLabel) {
+        sourceLabel = global.L.control({ position: 'bottomright' });
+        sourceLabel.onAdd = function () {
+          var div = global.L.DomUtil.create('div', 'map-source-label');
+          div.style.cssText = 'background:rgba(255,255,255,0.85);padding:2px 8px;border-radius:4px;font-size:11px;color:#6B7280;pointer-events:none;';
+          return div;
+        };
+        sourceLabel.addTo(map);
+      }
+      sourceLabel.getContainer().textContent = '地图来源：' + name;
+    });
 
     var latLngs = [];
+    var allBounds = [];
+
+    // 出发地 Hub（单目的地模式）
+    var originLatLng = null;
+    var originName = '';
+    if (!isMultiCity && state.plan && state.plan.tripContext && state.plan.tripContext.origin) {
+      originName = state.plan.tripContext.origin;
+      // 尝试从已有数据中找出发地坐标（优先用第一个path的originCoordinates，或 city.name 匹配）
+      var firstPath = (result.decisionPaths || [])[0];
+      if (firstPath && firstPath.originCoordinates) {
+        originLatLng = [firstPath.originCoordinates.lat, firstPath.originCoordinates.lng];
+      }
+    }
+
+    // 渲染目的地标记
     points.forEach(function (point) {
       var latLng = [point.coordinates.lat, point.coordinates.lng];
       latLngs.push(latLng);
+      allBounds.push(latLng);
       global.L.marker(latLng, {
         title: point.name,
-        alt: '路线节点：' + point.name
+        alt: '目的地：' + point.name
       }).addTo(map).bindTooltip(point.name + (point.meta ? ' · ' + point.meta : ''));
     });
-    if (latLngs.length > 1) {
+
+    // 路线绘制
+    if (isMultiCity) {
+      // 多城路线：顺序折线
+      if (latLngs.length > 1) {
+        global.L.polyline(latLngs, { color: '#275EFE', weight: 3, opacity: 0.72 }).addTo(map);
+      }
+    } else if (originLatLng) {
+      // 单目的地：Hub-Spoke 放射式
+      allBounds.push(originLatLng);
+      // 出发地 Hub 标记（品牌绿色）
+      var hubIcon = global.L.divIcon({
+        className: 'hub-marker',
+        html: '<div style="width:14px;height:14px;background:#2D6A4F;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+      global.L.marker(originLatLng, { icon: hubIcon, title: originName, alt: '出发地：' + originName })
+        .addTo(map).bindTooltip(originName + ' · 出发地');
+
+      // 放射线 + 点击交通时间
+      points.forEach(function (point) {
+        var destLatLng = [point.coordinates.lat, point.coordinates.lng];
+        var polyline = global.L.polyline([originLatLng, destLatLng], {
+          color: '#275EFE', weight: 2, opacity: 0.55, dashArray: '6, 4'
+        }).addTo(map);
+
+        polyline.on('click', function (e) {
+          var dist = haversineDistance(originLatLng[0], originLatLng[1], destLatLng[0], destLatLng[1]);
+          var estimates = estimateTransitTime(dist);
+          var popupContent = '<div style="min-width:180px;">' +
+            '<div style="font-weight:600;margin-bottom:6px;">' + originName + ' → ' + point.name + '</div>' +
+            '<div style="font-size:12px;color:#6B7280;margin-bottom:4px;">直线距离 ' + Math.round(dist) + ' 公里</div>' +
+            '<div style="display:flex;gap:12px;font-size:13px;">' +
+            '<div>🚗 ' + estimates.driving.label + '</div>' +
+            '<div>🚌 ' + estimates.transit.label + '</div>' +
+            '<div>🚶 ' + estimates.walking.label + '</div>' +
+            '</div>' +
+            '<div style="font-size:11px;color:#9CA3AF;margin-top:6px;">按直线距离估算，仅供参考</div>' +
+            '</div>';
+          global.L.popup({ offset: [0, -5] }).setLatLng(e.latlng).setContent(popupContent).openOn(map);
+        });
+      });
+    } else if (latLngs.length > 1) {
+      // 无出发地坐标时 fallback 到顺序折线
       global.L.polyline(latLngs, { color: '#275EFE', weight: 3, opacity: 0.72 }).addTo(map);
-      map.setView([30.5, 114.5], 4);
-    } else {
-      map.setView(latLngs[0], 10);
     }
+
+    // 视图适配
     var resizeFrame = 0;
     function fitMapToRoute() {
       resizeFrame = 0;
       if (!mapElement.isConnected || activePlanMap !== map) return;
       map.invalidateSize();
-      if (latLngs.length > 1) {
-        map.fitBounds(latLngs, { padding: [26, 26], maxZoom: 7 });
-        var latitudes = latLngs.map(function (point) { return point[0]; });
-        var longitudes = latLngs.map(function (point) { return point[1]; });
-        var latitudeSpan = Math.max.apply(null, latitudes) - Math.min.apply(null, latitudes);
-        var longitudeSpan = Math.max.apply(null, longitudes) - Math.min.apply(null, longitudes);
-        if (latitudeSpan <= 28 && longitudeSpan <= 42 && map.getZoom() < 4) {
+      if (allBounds.length > 1) {
+        map.fitBounds(allBounds, { padding: [30, 30], maxZoom: 7 });
+        var latitudes = allBounds.map(function (p) { return p[0]; });
+        var longitudes = allBounds.map(function (p) { return p[1]; });
+        var latSpan = Math.max.apply(null, latitudes) - Math.min.apply(null, latitudes);
+        var lngSpan = Math.max.apply(null, longitudes) - Math.min.apply(null, longitudes);
+        if (latSpan <= 28 && lngSpan <= 42 && map.getZoom() < 4) {
           map.setZoom(4);
         }
+      } else if (allBounds.length === 1) {
+        map.setView(allBounds[0], 10);
       }
     }
     activePlanMapResizeHandler = function () {
@@ -505,6 +655,51 @@
       activePlanMapResizeObserver.observe(mapElement);
     }
     resizeFrame = global.requestAnimationFrame(fitMapToRoute);
+  }
+
+  // ========== 每日迷你地图初始化 ==========
+  function initDayMiniMap(containerId, pois, cityCenter) {
+    if (!global.L) return;
+    var container = document.getElementById(containerId);
+    if (!container) return;
+
+    var center = cityCenter && cityCenter.lat != null
+      ? [cityCenter.lat, cityCenter.lng]
+      : [pois[0].lat, pois[0].lng];
+
+    var map = global.L.map(container, {
+      scrollWheelZoom: false,
+      zoomControl: false,
+      attributionControl: false
+    });
+
+    // 复用瓦片逻辑，但静默模式（无来源标签切换）
+    global.L.tileLayer(TILE_SOURCES[0].url, {
+      maxZoom: 18,
+      subdomains: TILE_SOURCES[0].subdomains,
+      attribution: ''
+    }).addTo(map);
+
+    var bounds = [];
+    pois.forEach(function (p) {
+      var latLng = [p.lat, p.lng];
+      bounds.push(latLng);
+      global.L.circleMarker(latLng, {
+        radius: 5,
+        color: '#275EFE',
+        fillColor: '#275EFE',
+        fillOpacity: 0.8,
+        weight: 1
+      }).addTo(map).bindTooltip(p.name);
+    });
+
+    if (bounds.length === 1) {
+      map.setView(bounds[0], 14);
+    } else if (bounds.length > 1) {
+      map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15 });
+    } else {
+      map.setView(center, 13);
+    }
   }
 
   /**
@@ -580,14 +775,63 @@
       ]));
     }
 
-    // 实时天气摘要（如果有）
+    // 实时天气摘要
     var weather = path.weather || null;
     if (weather && weather.forecast && weather.forecast.length > 0) {
       var w = weather.forecast[0];
+      var weatherIcons = { '晴': '☀️', '多云': '⛅', '阴': '☁️', '小雨': '🌦️', '中雨': '🌧️', '大雨': '⛈️', '雷阵雨': '⛈️', '雪': '❄️', '雾': '🌫️', '霾': '😷' };
+      var icon = weatherIcons[w.textDay] || '';
+      var windText = w.windDir && w.windScale ? ' · ' + w.windDir + w.windScale + '级' : '';
       card.appendChild(el('div', { className: 'path-card__weather' }, [
         el('span', { className: 'path-card__weather-label', textContent: '天气' }),
-        el('span', { textContent: w.textDay + ' ' + w.tempMin + '°~' + w.tempMax + '°' })
+        el('span', { textContent: icon + ' ' + w.textDay + ' ' + w.tempMin + '°~' + w.tempMax + '°' + windText })
       ]));
+    } else {
+      card.appendChild(el('div', { className: 'path-card__weather' }, [
+        el('span', { className: 'path-card__weather-label', textContent: '天气' }),
+        el('span', { style: { color: '#9CA3AF' }, textContent: '数据暂不可用' })
+      ]));
+    }
+
+    // 交通成本（异步加载）
+    var originName = state.plan && state.plan.tripContext && state.plan.tripContext.origin ? state.plan.tripContext.origin : '';
+    if (originName && originName !== city.name) {
+      var transportEl = el('div', { className: 'path-card__transport' }, [
+        el('span', { className: 'path-card__transport-label', textContent: '往返交通' }),
+        el('span', { className: 'path-card__transport-loading', textContent: '查询中...' })
+      ]);
+      card.appendChild(transportEl);
+      // 异步查询交通成本
+      apiCall('POST', '/transport/cost-estimate', { from: originName, to: city.name }).then(function (res) {
+        if (!transportEl.isConnected) return;
+        var textEl = transportEl.querySelector('.path-card__transport-loading');
+        if (!textEl) return;
+        if (res.available) {
+          var durationText = res.durationHours.min + '-' + res.durationHours.max + '小时';
+          var fareText = '¥' + res.fareCny.min + '-' + res.fareCny.max;
+          textEl.className = '';
+          textEl.textContent = fareText + ' · ' + (res.mode === 'rail' ? '铁路' : res.mode) + ' ' + durationText;
+          // 叠加交通费用到总预算显示
+          var costValueEl = card.querySelector('.path-card__cost-value');
+          if (costValueEl && cost.totalMin != null && cost.totalMax != null) {
+            var newMin = cost.totalMin + res.fareCny.min;
+            var newMax = cost.totalMax + res.fareCny.max;
+            costValueEl.textContent = formatCurrency(newMin) + ' - ' + formatCurrency(newMax) + '（含往返交通）';
+          }
+        } else {
+          textEl.className = '';
+          textEl.style.color = '#9CA3AF';
+          textEl.textContent = '数据待补充';
+        }
+      }).catch(function () {
+        if (!transportEl.isConnected) return;
+        var textEl = transportEl.querySelector('.path-card__transport-loading');
+        if (textEl) {
+          textEl.className = '';
+          textEl.style.color = '#9CA3AF';
+          textEl.textContent = '查询失败';
+        }
+      });
     }
 
     // 反事实解释（总纲6.3）
@@ -598,10 +842,10 @@
       ]));
     }
 
-    // AI 详细日程按钮
+    // 旅格详细日程按钮
     card.appendChild(el('button', {
       className: 'btn btn--text btn--block itinerary-btn',
-      textContent: '查看 AI 详细日程',
+      textContent: '查看旅格详细日程',
       onClick: function (event) {
         event.stopPropagation();
         renderItineraryModal(city, path);
@@ -619,7 +863,7 @@
     var plan = state.plan;
     var tripContext = plan.tripContext || {};
     var tripIntent = plan.tripIntent || {};
-    var loadingTexts = ['AI 正在规划', 'AI 正在规划.', 'AI 正在规划..', 'AI 正在规划...'];
+    var loadingTexts = ['旅格正在为您规划行程', '旅格正在为您规划行程.', '旅格正在为您规划行程..', '旅格正在为您规划行程...'];
     var loadingIndex = 0;
 
     var contentArea = el('div', { className: 'itinerary-content' });
@@ -643,7 +887,7 @@
     }, [
       el('div', { className: 'itinerary-dialog__header' }, [
         el('div', {}, [
-          el('div', { className: 'page-kicker', textContent: 'AI ITINERARY' }),
+          el('div', { className: 'page-kicker', textContent: '旅格 ITINERARY' }),
           el('h2', { id: 'itinerary-dialog-title', textContent: (city.name || '未知城市') + ' · 详细日程' })
         ]),
         el('button', {
@@ -712,7 +956,7 @@
     try {
       var itinerary = await apiCall('POST', '/plans/itinerary', requestBody);
       clearInterval(loadingInterval);
-      renderItineraryContent(contentArea, itinerary, city);
+      renderItineraryContent(contentArea, itinerary, city, pois);
     } catch (err) {
       clearInterval(loadingInterval);
       contentArea.innerHTML = '';
@@ -725,7 +969,7 @@
             contentArea.innerHTML = '';
             var loadingArea2 = el('div', { className: 'itinerary-loading' }, [
               el('div', { className: 'itinerary-loading__spinner' }),
-              el('div', { className: 'itinerary-loading__text', textContent: 'AI 正在规划' })
+              el('div', { className: 'itinerary-loading__text', textContent: '旅格正在为您规划行程' })
             ]);
             contentArea.appendChild(loadingArea2);
             fetchPOIsAndGenerate(city, path, contentArea, loadingArea2, loadingInterval);
@@ -735,7 +979,7 @@
     }
   }
 
-  function renderItineraryContent(container, itinerary, city) {
+  function renderItineraryContent(container, itinerary, city, allPois) {
     container.innerHTML = '';
     var days = itinerary.days || [];
     var totalBudget = itinerary.totalBudget || 0;
@@ -759,10 +1003,16 @@
     });
 
     // 总预算与交通建议
+    var originName = state.plan && state.plan.tripContext && state.plan.tripContext.origin ? state.plan.tripContext.origin : '';
+    var transportCostEl = null;
     var summarySection = el('div', { className: 'itinerary-summary' }, [
       el('div', { className: 'itinerary-summary__budget' }, [
         el('span', { className: 'itinerary-summary__label', textContent: '预估总预算' }),
         el('span', { className: 'itinerary-summary__value', textContent: '¥' + totalBudget })
+      ]),
+      transportCostEl = el('div', { className: 'itinerary-summary__transport' }, [
+        el('span', { className: 'itinerary-summary__label', textContent: '往返交通' }),
+        el('span', { textContent: '查询中...' })
       ]),
       transportTips ? el('div', { className: 'itinerary-summary__transport' }, [
         el('span', { className: 'itinerary-summary__label', textContent: '交通建议' }),
@@ -773,14 +1023,57 @@
     container.appendChild(summarySection);
     container.appendChild(budgetBars);
 
+    // 异步查询往返交通成本并更新
+    if (originName && originName !== city.name) {
+      apiCall('POST', '/transport/cost-estimate', { from: originName, to: city.name }).then(function (res) {
+        if (!transportCostEl || !transportCostEl.isConnected) return;
+        if (res.available) {
+          var durationText = res.durationHours.min + '-' + res.durationHours.max + '小时';
+          var fareText = '¥' + res.fareCny.min + '-' + res.fareCny.max;
+          transportCostEl.querySelector('span:last-child').textContent = fareText + ' · ' + (res.mode === 'rail' ? '铁路' : res.mode) + ' ' + durationText;
+          // 更新总预算显示
+          var budgetValueEl = summarySection.querySelector('.itinerary-summary__value');
+          if (budgetValueEl) {
+            var newTotal = totalBudget + res.fareCny.min;
+            budgetValueEl.textContent = '¥' + newTotal + '起（含往返交通）';
+          }
+        } else {
+          transportCostEl.querySelector('span:last-child').textContent = '数据待补充';
+          transportCostEl.querySelector('span:last-child').style.color = '#9CA3AF';
+        }
+      }).catch(function () {
+        if (transportCostEl && transportCostEl.isConnected) {
+          transportCostEl.querySelector('span:last-child').textContent = '查询失败';
+          transportCostEl.querySelector('span:last-child').style.color = '#9CA3AF';
+        }
+      });
+    } else if (transportCostEl) {
+      transportCostEl.style.display = 'none';
+    }
+
     // 按天展示时间线
     days.forEach(function (day) {
+      // 提取当天有坐标的 POI
+      var dayPois = [];
+      (day.schedule || []).forEach(function (item) {
+        if (item.poiName && allPois) {
+          var matched = allPois.find(function (p) { return p.name === item.poiName; });
+          if (matched && matched.lat != null && matched.lng != null) {
+            dayPois.push({ name: matched.name, lat: matched.lat, lng: matched.lng });
+          }
+        }
+      });
+
+      var mapContainerId = 'day-map-' + day.day;
+      var dayMapEl = el('div', { id: mapContainerId, className: 'itinerary-day__map' });
+
       var dayEl = el('div', { className: 'itinerary-day' }, [
         el('div', { className: 'itinerary-day__header' }, [
           el('span', { className: 'itinerary-day__number', textContent: 'Day ' + day.day }),
           el('span', { className: 'itinerary-day__date', textContent: day.date || '' }),
           el('span', { className: 'itinerary-day__theme', textContent: day.theme || '' })
         ]),
+        dayMapEl,
         el('div', { className: 'itinerary-day__transport', textContent: day.dayTransport || '' }),
         el('div', { className: 'itinerary-timeline' })
       ]);
@@ -804,6 +1097,13 @@
       });
 
       container.appendChild(dayEl);
+
+      // 在 DOM 插入后初始化迷你地图
+      if (dayPois.length > 0) {
+        requestAnimationFrame(function () {
+          initDayMiniMap(mapContainerId, dayPois, city.coordinates);
+        });
+      }
     });
   }
 

@@ -115,7 +115,29 @@ const INTERCITY_CONNECTIONS = [
 
   // === 跨区域主干（2条） ===
   connection('北京', '成都', 7.5, 10, 780, 1200, { frequency: 'medium', confidence: 0.66 }),
-  connection('上海', '成都', 10, 13, 600, 950, { frequency: 'medium', confidence: 0.64 })
+  connection('上海', '成都', 10, 13, 600, 950, { frequency: 'medium', confidence: 0.64 }),
+
+  // === 补充高频直达（20条） ===
+  connection('北京', '广州', 8, 10, 850, 1300, { frequency: 'medium', confidence: 0.66 }),
+  connection('北京', '深圳', 8, 10.5, 900, 1400, { frequency: 'medium', confidence: 0.66 }),
+  connection('上海', '广州', 6.5, 8.5, 700, 1100, { frequency: 'medium', confidence: 0.66 }),
+  connection('上海', '深圳', 7, 9, 750, 1200, { frequency: 'medium', confidence: 0.66 }),
+  connection('北京', '武汉', 4.5, 6, 520, 820, { frequency: 'medium', confidence: 0.66 }),
+  connection('上海', '武汉', 4.5, 6, 450, 750, { frequency: 'medium', confidence: 0.66 }),
+  connection('广州', '成都', 8, 10, 550, 900, { frequency: 'medium', confidence: 0.64 }),
+  connection('深圳', '成都', 8.5, 11, 600, 980, { frequency: 'medium', confidence: 0.64 }),
+  connection('杭州', '武汉', 4.5, 6, 350, 580, { frequency: 'medium', confidence: 0.66 }),
+  connection('杭州', '长沙', 4, 5.5, 320, 520, { frequency: 'medium', confidence: 0.66 }),
+  connection('南京', '长沙', 4, 5.5, 350, 560, { frequency: 'medium', confidence: 0.66 }),
+  connection('天津', '南京', 3, 4.5, 300, 480, { frequency: 'medium', confidence: 0.66 }),
+  connection('西安', '南京', 5, 6.5, 420, 680, { frequency: 'medium', confidence: 0.66 }),
+  connection('成都', '南京', 8, 10, 500, 800, { frequency: 'medium', confidence: 0.64 }),
+  connection('重庆', '南京', 7, 9, 480, 780, { frequency: 'medium', confidence: 0.64 }),
+  connection('长沙', '桂林', 3.5, 5, 200, 350, { frequency: 'medium', confidence: 0.66 }),
+  connection('武汉', '桂林', 4.5, 6, 280, 450, { frequency: 'medium', confidence: 0.66 }),
+  connection('福州', '南昌', 3, 4.5, 180, 320, { frequency: 'medium', confidence: 0.66 }),
+  connection('厦门', '南昌', 3.5, 5, 200, 350, { frequency: 'medium', confidence: 0.66 }),
+  connection('杭州', '南昌', 3, 4, 240, 400, { frequency: 'medium', confidence: 0.66 })
 ];
 
 module.exports = { INTERCITY_CONNECTIONS, VERIFIED_AT };

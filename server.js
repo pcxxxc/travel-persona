@@ -93,7 +93,7 @@ app.use((req, res, next) => {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://*.tile.openstreetmap.org",
+    "img-src 'self' data: https://*.tile.openstreetmap.org https://webrd0*.is.autonavi.com https://webrd1*.is.autonavi.com https://webrd2*.is.autonavi.com https://webrd3*.is.autonavi.com https://webrd4*.is.autonavi.com",
     "connect-src 'self'",
     "font-src 'self'",
     "object-src 'none'",
@@ -475,6 +475,7 @@ const v1JournalsRouter = require('./src/api/v1/journals');
 const v1AgentRouter = require('./src/api/v1/agent');
 const v1OpsRouter = require('./src/api/v1/ops');
 const v1MapRouter = require('./src/api/v1/map');
+const v1TransportRouter = require('./src/api/v1/transport');
 const v1TelemetryRouter = require('./src/api/v1/telemetry');
 
 app.use('/api/v1/plans', v1PlansRouter);
@@ -482,6 +483,7 @@ app.use('/api/v1/journals', v1JournalsRouter);
 app.use('/api/v1/agent', v1AgentRouter);
 app.use('/api/v1/ops', v1OpsRouter);
 app.use('/api/v1/map', v1MapRouter);
+app.use('/api/v1/transport', v1TransportRouter);
 app.use('/api/v1/telemetry', v1TelemetryRouter);
 
 // ===== 静态文件服务 =====

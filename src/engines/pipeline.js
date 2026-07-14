@@ -274,6 +274,27 @@ async function generatePlan(input) {
   // --- 步骤 10: 跨路径多样性去重 ---
   const diversifiedPaths = diversifyAcrossPaths(rerankedPaths);
 
+  // 补查最终路径 Top1 城市的天气（可能不在 preliminary Top4 内）
+  const finalTopCityIds = new Set();
+  Object.values(diversifiedPaths).forEach(candidates => {
+    if (candidates && candidates[0]) {
+      finalTopCityIds.add(candidates[0].city.cityId || candidates[0].city.id);
+    }
+  });
+  await Promise.all(
+    Array.from(finalTopCityIds).map(async cityId => {
+      if (weatherMap[cityId]) return;
+      const cityObj = filteredCities.find(c => (c.cityId || c.id) === cityId);
+      if (!cityObj) return;
+      try {
+        const w = await getWeather(cityId, { cityName: cityObj.name, coordinates: cityObj.coordinates });
+        if (w) weatherMap[cityId] = w;
+      } catch (e) {
+        console.warn(`[pipeline] 补查 ${cityId} 天气失败: ${e.message}`);
+      }
+    })
+  );
+
   // --- 步骤 11: 子维度增强（为 Top 候选城市计算子维度树）---
   const subDimensionData = {};
   const dimensionalDepthData = {};
@@ -424,6 +445,16 @@ async function generatePlan(input) {
     }
   }
   const hasVisibleWeather = Object.keys(weatherByPath).length > 0;
+
+  // 将天气数据附加到各路径（供前端 path.weather 使用）
+  decisionPaths.forEach(function (dp) {
+    if (dp.type && weatherByPath[dp.type]) {
+      dp.weather = weatherByPath[dp.type];
+    }
+    if (originCoordinates) {
+      dp.originCoordinates = originCoordinates;
+    }
+  });
 
   // --- 步骤 13: 构建最终响应 ---
   let multiCityPlan = null;

@@ -95,8 +95,13 @@ function clearCache() { _weatherCache.clear(); }
 
 // ========== Open-Meteo（无需Key）==========
 
-async function fetchFromOpenMeteo(cityId) {
-  const coords = CITY_COORDS[cityId];
+async function fetchFromOpenMeteo(cityIdOrCoords) {
+  let coords;
+  if (cityIdOrCoords && typeof cityIdOrCoords === 'object' && 'lat' in cityIdOrCoords) {
+    coords = cityIdOrCoords;
+  } else {
+    coords = CITY_COORDS[cityIdOrCoords];
+  }
   if (!coords) return null;
 
   const url = `${OPEN_METEO_BASE}?latitude=${coords.lat}&longitude=${coords.lng}` +
@@ -219,7 +224,9 @@ async function getWeather(cityId, options = {}) {
 
   // 尝试 Open-Meteo（无需Key）
   try {
-    const result = await fetchFromOpenMeteo(cityId);
+    const coords = CITY_COORDS[cityId] || options.coordinates || null;
+    if (!coords) return null;
+    const result = await fetchFromOpenMeteo(coords);
     if (result) {
       setCache(cityId, result);
       return { ...result, fetchedAt: new Date().toISOString(), cached: false };
