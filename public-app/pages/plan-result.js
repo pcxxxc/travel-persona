@@ -412,13 +412,15 @@
     ]);
   }
 
-  // ========== 瓦片层配置（中文优先 + 免Key降级）==========
+  // ========== 瓦片层配置（百度优先 + 免Key降级）==========
+
   var TILE_SOURCES = [
     {
-      name: '高德',
-      url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-      subdomains: '1234',
-      attribution: '&copy; 高德地图'
+      name: '百度地图',
+      url: 'http://online{s}.map.bdimg.com/onlinelabel/?qt=tile&x={x}&y={y}&z={z}&styles=pl&scaler=1&p=1',
+      subdomains: '0123456789',
+      tms: true,
+      attribution: '&copy; 百度地图'
     },
     {
       name: 'OpenStreetMap',
@@ -446,7 +448,8 @@
       currentLayer = global.L.tileLayer(src.url, {
         maxZoom: 18,
         attribution: src.attribution,
-        subdomains: src.subdomains
+        subdomains: src.subdomains,
+        tms: !!src.tms
       });
       currentLayer.on('tileerror', function () {
         errorCount++;

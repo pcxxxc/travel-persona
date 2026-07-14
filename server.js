@@ -93,7 +93,7 @@ app.use((req, res, next) => {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://webrd0*.is.autonavi.com https://webrd1*.is.autonavi.com https://webrd2*.is.autonavi.com https://webrd3*.is.autonavi.com https://webrd4*.is.autonavi.com",
+    "img-src 'self' data: https://*.tile.openstreetmap.org https://online*.map.bdimg.com https://api*.map.bdimg.com https://shangetu*.map.bdimg.com",
     "connect-src 'self'",
     "font-src 'self'",
     "object-src 'none'",
