@@ -15,7 +15,7 @@
  */
 
 const { getCities } = require('../data/cityRecords');
-const { geocode } = require('../services/map/nominatimProvider');
+const { geocode, localGeocode } = require('../services/map/nominatimProvider');
 const { getWeather } = require('../services/weather/weatherService');
 const { getTravelFriendliness } = require('../services/ops/holidayService');
 const { buildRouteExperiment } = require('../services/fallbackPlanner');
@@ -155,6 +155,13 @@ async function generatePlan(input) {
       }
     } catch (error) {
       console.warn(`[pipeline] 出发地解析失败，继续使用交通便利度降级评分: ${error.message}`);
+    }
+    // Fallback: 如果 geocode 全部失败，直接使用 LOCAL_CITIES
+    if (!originCoordinates) {
+      const localHits = localGeocode(originText);
+      if (localHits?.[0]) {
+        originCoordinates = { lat: localHits[0].lat, lng: localHits[0].lng };
+      }
     }
   }
   const scoringContext = { ...effectiveTripContext, originCoordinates };

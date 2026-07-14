@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=20260714-01">
+  <link rel="stylesheet" href="styles.css?v=20260715-01">
 </head>
 <body>
   <header class="app-header" aria-label="旅格主导航">
@@ -54,15 +54,15 @@
   <!-- ===== 核心脚本（纯JS实现，无框架依赖） ===== -->
   <!-- app.js 定义全局 App 命名空间、路由器和状态管理 -->
   <script defer src="tripSync.js?v=20260713-1"></script>
-  <script defer src="app.js?v=20260714-01"></script>
+  <script defer src="app.js?v=20260715-01"></script>
   <script defer src="components/personaRadar.js?v=20260714-01"></script>
   <script defer src="pathSelection.js?v=20260713-17"></script>
   <script defer src="vendor/leaflet/leaflet.js"></script>
   <!-- plan.js 模块拆分（P1-3 前端性能优化）：先加载子模块，最后加载协调入口 -->
-  <script defer src="pages/plan-route.js?v=20260713-28"></script>
-  <script defer src="pages/plan-result.js?v=20260713-28"></script>
-  <script defer src="pages/plan-form.js?v=20260714-01"></script>
+  <script defer src="pages/plan-route.js?v=20260715-01"></script>
+    <script defer src="pages/plan-result.js?v=20260715-01"></script>
+    <script defer src="pages/plan-form.js?v=20260715-01"></script>
   <!-- plan.js 协调入口，注册 App.PlanPage 并委托给上述子模块 -->
-  <script defer src="pages/plan.js?v=20260714-01"></script>
+  <script defer src="pages/plan.js?v=20260715-01"></script>
 </body>
 </html>
