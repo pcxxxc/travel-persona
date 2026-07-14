@@ -152,6 +152,253 @@ class AgentProvider {
   }
 }
 
+// ===== DeepSeek 实现 =====
+
+/**
+ * DeepSeekAgentProvider —— 调用 DeepSeek API（OpenAI 兼容格式）
+ * - 超时 15 秒（AbortController）
+ * - 最多重试 2 次
+ * - 受熔断器保护（连续 5 次失败熔断 30 秒）
+ * - 返回结构化 Patch，并经 _safeReturn 校验
+ */
+class DeepSeekAgentProvider extends AgentProvider {
+  constructor(options = {}) {
+    super(options);
+    this.name = 'deepseek';
+    this.apiKey = options.apiKey || process.env.DEEPSEEK_API_KEY || process.env.GLM_API_KEY;
+    this.baseUrl = options.baseUrl || process.env.DEEPSEEK_BASE_URL || process.env.GLM_BASE_URL || 'https://api.deepseek.com/v1';
+    this.model = options.model || process.env.DEEPSEEK_MODEL || process.env.GLM_MODEL || 'deepseek-chat';
+    this.timeout = options.timeout || 15000;
+    this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 2;
+    this.breaker = options.breaker || getBreaker('deepseek-agent', {
+      failureThreshold: 5,
+      recoveryTimeout: 30000
+    });
+
+    if (!this.apiKey) {
+      throw new LLMError('未设置 DEEPSEEK_API_KEY 或 GLM_API_KEY 环境变量', { operation: 'init_deepseek' });
+    }
+  }
+
+  async _callDeepSeek(prompt, { maxTokens = 1024 } = {}) {
+    return this.breaker.execute(async () => {
+      const attempts = this.maxRetries + 1;
+      let lastErr = null;
+
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), this.timeout);
+        try {
+          const resp = await fetch(`${this.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.apiKey}`
+            },
+            body: JSON.stringify({
+              model: this.model,
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: maxTokens,
+              temperature: 0.3
+            }),
+            signal: controller.signal
+          });
+
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new LLMError(`DeepSeek API 错误 ${resp.status}: ${text}`, {
+              operation: 'call_deepseek',
+              status: resp.status,
+              response: text
+            });
+          }
+
+          const data = await resp.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          return content;
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            lastErr = new LLMError(`DeepSeek 调用超时（${this.timeout}ms）`, {
+              operation: 'call_deepseek',
+              timeout: this.timeout
+            });
+          } else if (err instanceof LLMError) {
+            lastErr = err;
+          } else {
+            lastErr = new LLMError(`DeepSeek 调用失败: ${err.message}`, {
+              operation: 'call_deepseek',
+              originalError: err.message
+            });
+          }
+
+          const status = lastErr.context?.status;
+          const isTimeout = !!lastErr.context?.timeout;
+          const retriable = isTimeout || status === 429 || (status >= 500 && status <= 599) || !status;
+          if (!retriable || attempt === attempts - 1) {
+            break;
+          }
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      throw lastErr instanceof Error
+        ? lastErr
+        : new LLMError(`DeepSeek 调用失败: ${lastErr}`, { operation: 'call_deepseek' });
+    });
+  }
+
+  _normalizePatch(parsed) {
+    if (parsed && Array.isArray(parsed.operations)) {
+      return parsed;
+    }
+    throw new LLMError('Agent 返回非结构化 Patch（缺少 operations）', {
+      operation: 'normalize_patch',
+      parsed
+    });
+  }
+
+  async extractIntent(freeText) {
+    if (!freeText || typeof freeText !== 'string') {
+      throw new ValidationError('freeText 必须是字符串', { freeText });
+    }
+    const prompt = [
+      '你是旅格的旅行意图分析助手。请从用户自由文本中提取「当次旅行取向」（软偏好），以 JSON Patch 格式返回。',
+      '只允许修改路径：/intent、/softPreferences、/tempAdjustments、/sessionNotes。',
+      '禁止修改 /personaProfile/traits、/lockedTraits、/hardConstraints、/lockedNodes。',
+      '不得创建未经验证的 POI。',
+      `用户文本：${freeText}`,
+      '返回格式：{ "operations": [ { "op": "replace", "path": "/intent/summary", "value": "..." } ] }'
+    ].join('\n');
+
+    const content = await this._callDeepSeek(prompt, { maxTokens: 512 });
+    const patch = this._normalizePatch(parseJSONContent(content));
+    return this._safeReturn(patch, ALLOWED_PATHS.extractIntent, this.dataSource);
+  }
+
+  async enhanceExplanation(planResponse) {
+    if (!planResponse || typeof planResponse !== 'object') {
+      throw new ValidationError('planResponse 必须是对象', { planResponse });
+    }
+    const prompt = [
+      '你是旅格的旅行编辑。请基于本地推荐结果，写出自然、克制的解释，以 JSON Patch 格式返回。',
+      '只允许修改路径：/explanations、/highlights、/conversationReply。',
+      '禁止修改 /personaProfile/traits、/lockedTraits、/hardConstraints、/lockedNodes。',
+      '语气温暖但不煽情，不要过度承诺，不要堆砌景点。',
+      `本地结果摘要：${JSON.stringify(planResponse).slice(0, 1500)}`,
+      '返回格式：{ "operations": [ { "op": "replace", "path": "/explanations/0/reason", "value": "..." } ] }'
+    ].join('\n');
+
+    const content = await this._callDeepSeek(prompt, { maxTokens: 1024 });
+    const patch = this._normalizePatch(parseJSONContent(content));
+    return this._safeReturn(patch, ALLOWED_PATHS.enhanceExplanation, this.dataSource);
+  }
+
+  async adjustInTrip(planId, adjustments) {
+    if (!planId) {
+      throw new ValidationError('planId 不能为空', { planId });
+    }
+    const prompt = [
+      '你是旅格的旅中调整助手。请根据旅中状态生成受约束的行程调整，以 JSON Patch 格式返回。',
+      '只允许修改路径：/selectedPlan/days、/selectedPlan/notes、/uncertainties。',
+      '禁止移动锁定节点（/lockedNodes），禁止修改硬约束与长期人格。',
+      '不得创建未经验证的 POI；如需替换地点，只能引用已验证 POI。',
+      `行程ID：${planId}`,
+      `调整指令：${JSON.stringify(adjustments || {})}`,
+      '返回格式：{ "operations": [ { "op": "replace", "path": "/selectedPlan/days/0/morning", "value": "..." } ] }'
+    ].join('\n');
+
+    const content = await this._callDeepSeek(prompt, { maxTokens: 1024 });
+    const patch = this._normalizePatch(parseJSONContent(content));
+    return this._safeReturn(patch, ALLOWED_PATHS.adjustInTrip, this.dataSource);
+  }
+
+  async summarizeJournal(journalEntries) {
+    const entries = Array.isArray(journalEntries) ? journalEntries : [];
+    const prompt = [
+      '你是旅格的复盘助手。请根据用户手账生成旅后复盘摘要与温和的反思问题，以 JSON Patch 格式返回。',
+      '只允许修改路径：/journalSummary、/insights、/reflectionPrompts。',
+      '只递问题、不给建议；主语始终是用户；不得根据敏感输入生成身份/心理标签。',
+      `手账条目：${JSON.stringify(entries).slice(0, 1500)}`,
+      '返回格式：{ "operations": [ { "op": "replace", "path": "/journalSummary", "value": "..." } ] }'
+    ].join('\n');
+
+    const content = await this._callDeepSeek(prompt, { maxTokens: 1024 });
+    const patch = this._normalizePatch(parseJSONContent(content));
+    return this._safeReturn(patch, ALLOWED_PATHS.summarizeJournal, this.dataSource);
+  }
+
+  async generateItinerary(params) {
+    const {
+      cityName = '',
+      days = 3,
+      budget = 1000,
+      interests = [],
+      avoid = [],
+      mood = '',
+      companion = 'solo',
+      pois = []
+    } = params || {};
+
+    const prompt = [
+      '你是一位资深旅行规划师。请根据以下信息，为用户生成一份详细的城市旅行日程规划。',
+      '',
+      '## 输入信息',
+      `- 城市：${cityName}`,
+      `- 天数：${days} 天`,
+      `- 总预算：约 ${budget} 元`,
+      `- 兴趣：${interests.join('、') || '无特定偏好'}`,
+      `- 回避：${avoid.join('、') || '无'}`,
+      `- 旅行动机：${mood}`,
+      `- 同行：${companion}`,
+      `- 可用 POI 列表（必须从中选择，不要虚构未列出的地点）：`,
+      JSON.stringify(pois.slice(0, 30), null, 2),
+      '',
+      '## 输出规则',
+      '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
+      '2. 每天安排 2-4 个活动，时间合理，避免过度紧凑。',
+      '3. POI 名称必须匹配上方提供的列表中的 name 字段。',
+      '4. 预算分配要现实，包含餐饮、门票、交通、住宿等。',
+      '5. 根据兴趣和回避调整推荐内容。',
+      '6. 每个活动包含实用建议（tips）。',
+      '7. 类型只能是：景点、餐饮、交通、休息 四种之一。',
+      '',
+      '## 输出格式',
+      JSON.stringify({
+        days: [
+          {
+            day: 1,
+            date: '建议日期描述，如"第一天 · 抵达与初探"',
+            theme: '当天主题',
+            schedule: [
+              {
+                time: '09:00-11:30',
+                activity: '活动名称',
+                poiName: 'POI名称（必须匹配pois列表）',
+                type: '景点/餐饮/交通/休息',
+                budget: 120,
+                tips: '实用建议',
+                lat: 39.9,
+                lng: 116.4
+              }
+            ],
+            dayBudget: 350,
+            dayTransport: '地铁/公交/步行'
+          }
+        ],
+        totalBudget: 1050,
+        transportTips: '整体交通建议',
+        budgetBreakdown: { '住宿': 400, '餐饮': 300, '门票': 200, '交通': 150 }
+      }, null, 2),
+      '',
+      '请直接输出纯 JSON，不要包裹在 ```json 代码块中。'
+    ].join('\n');
+
+    const content = await this._callDeepSeek(prompt, { maxTokens: 4096 });
+    return parseJSONContent(content);
+  }
+}
+
 // ===== GLM 实现 =====
 
 /**
@@ -677,6 +924,9 @@ function guessMood(entries) {
  */
 function getAgentProvider(options = {}) {
   const choice = (options.provider || process.env.AGENT_PROVIDER || '').toLowerCase();
+  if (choice === 'deepseek') {
+    return new DeepSeekAgentProvider(options);
+  }
   if (choice === 'glm') {
     return new GLMAgentProvider(options);
   }
@@ -713,6 +963,7 @@ async function runWithAgent(provider, methodName, args, fallback) {
 
 module.exports = {
   AgentProvider,
+  DeepSeekAgentProvider,
   GLMAgentProvider,
   MockAgentProvider,
   getAgentProvider,
