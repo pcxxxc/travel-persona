@@ -11,11 +11,11 @@ module.exports = {
     instances: 2,
     exec_mode: 'cluster',
     env: {
-      NODE_ENV: 'production',
+      NODE_ENV: 'development',
       PORT: 3000
     },
-    env_development: {
-      NODE_ENV: 'development',
+    env_production: {
+      NODE_ENV: 'production',
       PORT: 3000
     },
     log_date_format: 'YYYY-MM-DD HH:mm:ss',
