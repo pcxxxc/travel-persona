@@ -300,7 +300,27 @@
       }
       grid.appendChild(renderPathCard(path, state.plan.selectedPathType === path.type, function () {
         state.plan.selectedPathType = path.type;
-        App.PlanPage.render(document.getElementById('app'));
+        var grid = document.querySelector('.card-grid');
+        if (grid) {
+          grid.querySelectorAll('.path-card').forEach(function(c) {
+            var isSel = c.dataset.pathType === path.type;
+            c.classList.toggle('path-card--selected', isSel);
+            c.setAttribute('aria-checked', String(isSel));
+            // 更新选择指示文字
+            var selSpan = c.querySelector('.path-card__selection span:last-child');
+            var iconWrap = c.querySelector('.path-card__selection');
+            if (selSpan) selSpan.textContent = isSel ? '当前选择' : '选择这条';
+            var oldIcon = iconWrap ? iconWrap.querySelector('.path-card__selection-icon') : null;
+            var oldDot = iconWrap ? iconWrap.querySelector('.path-card__selection-dot') : null;
+            if (isSel && oldDot) {
+              oldDot.remove();
+              iconWrap.insertBefore(icon('check', 'path-card__selection-icon'), iconWrap.querySelector('span'));
+            } else if (!isSel && oldIcon) {
+              oldIcon.remove();
+              iconWrap.insertBefore(el('span', { className: 'path-card__selection-dot' }), iconWrap.querySelector('span'));
+            }
+          });
+        }
       }));
     });
 
@@ -504,6 +524,7 @@
       className: 'card path-card path-card--' + pathType + (selected ? ' path-card--selected' : ''),
       role: 'radio',
       tabindex: '0',
+      dataset: { pathType: pathType },
       'aria-checked': selected ? 'true' : 'false',
       onClick: onSelect,
       onKeydown: function (event) {

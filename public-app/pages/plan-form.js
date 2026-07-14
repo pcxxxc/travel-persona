@@ -143,7 +143,17 @@
 
       card.addEventListener('click', function () {
         state.plan.tripIntent.mood = mood.key;
-        App.PlanPage.render(document.getElementById('app'));
+        var container = card.closest('.option-grid') || card.parentElement;
+        container.querySelectorAll('.option-card').forEach(function(c) {
+          var isSelected = c.dataset.mood === mood.key;
+          c.classList.toggle('option-card--selected', isSelected);
+          c.setAttribute('aria-pressed', String(isSelected));
+          var oldCheck = c.querySelector('.option-card__check');
+          if (oldCheck) oldCheck.remove();
+        });
+        card.appendChild(icon('check', 'option-card__check'));
+        var nextBtn = document.querySelector('.sampling-actions .btn--primary');
+        if (nextBtn) nextBtn.disabled = false;
       });
 
       grid.appendChild(card);
@@ -208,8 +218,19 @@
         } else {
           state.plan.tripIntent.interests.splice(idx, 1);
         }
-        // 重新渲染此步骤（更新选中状态）
-        App.PlanPage.render(document.getElementById('app'));
+        var container = card.closest('.option-grid') || card.parentElement;
+        container.querySelectorAll('.option-card').forEach(function(c) {
+          var isSel = state.plan.tripIntent.interests.indexOf(c.dataset.interest) !== -1;
+          c.classList.toggle('option-card--selected', isSel);
+          c.setAttribute('aria-pressed', String(isSel));
+          var oldCheck = c.querySelector('.option-card__check');
+          if (oldCheck) oldCheck.remove();
+          if (isSel) c.appendChild(icon('check', 'option-card__check'));
+        });
+        var countEl = document.querySelector('.sampling-heading .sampling-count');
+        if (countEl) countEl.textContent = '已选 ' + state.plan.tripIntent.interests.length + ' 项';
+        var nextBtn = document.querySelector('.sampling-actions .btn--primary');
+        if (nextBtn) nextBtn.disabled = state.plan.tripIntent.interests.length === 0;
       });
 
       grid.appendChild(card);
@@ -226,11 +247,17 @@
           className: 'choice-chip' + (selected ? ' choice-chip--selected' : ''),
           'aria-pressed': selected ? 'true' : 'false',
           textContent: item.label,
+          dataset: { avoid: item.key },
           onClick: function () {
             var idx = state.plan.tripIntent.avoid.indexOf(item.key);
             if (idx === -1) state.plan.tripIntent.avoid.push(item.key);
             else state.plan.tripIntent.avoid.splice(idx, 1);
-            App.PlanPage.render(document.getElementById('app'));
+            var chipGrid = this.closest('.chip-grid') || this.parentElement;
+            chipGrid.querySelectorAll('.choice-chip').forEach(function(c) {
+              var isSel = state.plan.tripIntent.avoid.indexOf(c.dataset.avoid) !== -1;
+              c.classList.toggle('choice-chip--selected', isSel);
+              c.setAttribute('aria-pressed', String(isSel));
+            });
           }
         });
       }))
@@ -245,9 +272,15 @@
           className: 'segment' + (selected ? ' segment--selected' : ''),
           'aria-pressed': selected ? 'true' : 'false',
           textContent: item.label,
+          dataset: { companion: item.key },
           onClick: function () {
             state.plan.tripIntent.companion = item.key;
-            App.PlanPage.render(document.getElementById('app'));
+            var group = this.closest('.segmented-control') || this.parentElement;
+            group.querySelectorAll('.segment').forEach(function(c) {
+              var isSel = c.dataset.companion === item.key;
+              c.classList.toggle('segment--selected', isSel);
+              c.setAttribute('aria-pressed', String(isSel));
+            });
           }
         });
       }))
@@ -339,10 +372,16 @@
         className: 'choice-chip' + (isSelected ? ' choice-chip--selected' : ''),
         'aria-pressed': isSelected ? 'true' : 'false',
         textContent: d + ' 天',
+        dataset: { days: String(d) },
         onClick: function () {
           ctx.days = d;
           state.plan.validationMessage = null;
-          App.PlanPage.render(document.getElementById('app'));
+          var chipGrid = this.closest('.chip-grid') || this.parentElement;
+          chipGrid.querySelectorAll('.choice-chip').forEach(function(c) {
+            var isSel = c.dataset.days === String(d);
+            c.classList.toggle('choice-chip--selected', isSel);
+            c.setAttribute('aria-pressed', String(isSel));
+          });
         }
       });
       daysRow.appendChild(tag);

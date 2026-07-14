@@ -518,7 +518,7 @@ input, textarea, select {
 /* 可选标签（用于筛选/选择） */
 .tag--selectable {
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
   border: 1px solid transparent;
 }
 
@@ -706,7 +706,7 @@ input, textarea, select {
   background: var(--color-bg-elevated);
   color: var(--color-muted);
   border: 2px solid var(--color-border);
-  transition: all var(--transition-normal);
+  transition: background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal);
 }
 
 .step-dot--active {
@@ -788,7 +788,7 @@ input, textarea, select {
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   text-align: center;
   min-height: 80px;
 }
