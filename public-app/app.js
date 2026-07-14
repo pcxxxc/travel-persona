@@ -730,9 +730,9 @@
       // 空状态友好提示
       page.appendChild(renderEmptyState(
         'luggage',
-        '还没有保存的行程',
-        '去规划一次旅行，选择喜欢的方案后即可保存到这里',
-        '开始规划',
+        '行囊空空',
+        '还没出发？先告诉旅格你想怎样度过这次旅行，选一条喜欢的方案，就可以保存到这里。',
+        '去规划一次',
         function () { location.hash = '#/plan'; }
       ));
     } else {
@@ -2199,6 +2199,33 @@
         ])
       ]);
       page.appendChild(personaCard);
+
+      // --- 人格维度雷达图 ---
+      if (App.PersonaRadar) {
+        var radarCard = el('div', { className: 'card mb-lg persona-radar-card' }, [
+          el('div', { className: 'card__header' }, [
+            el('div', { className: 'card__title', textContent: '人格维度雷达' })
+          ]),
+          el('canvas', {
+            className: 'persona-radar',
+            width: 320,
+            height: 320,
+            'aria-label': '16维人格雷达图，直观展示各维度分布'
+          })
+        ]);
+        page.appendChild(radarCard);
+        // 延迟绘制确保 DOM 已挂载
+        requestAnimationFrame(function () {
+          var canvas = radarCard.querySelector('.persona-radar');
+          if (canvas && canvas.getContext) {
+            App.PersonaRadar.draw(
+              canvas,
+              persona.acceptedTraits,
+              persona.provisionalTraits
+            );
+          }
+        });
+      }
     }
 
     // --- 16维人格维度列表 ---
