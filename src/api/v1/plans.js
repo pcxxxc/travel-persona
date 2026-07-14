@@ -143,8 +143,8 @@ router.post('/', async (req, res) => {
         : freeTextSafety.sanitizedText
     };
 
-    // 整体超时保护：25 秒超限返回降级结果
-    const PLAN_TIMEOUT_MS = 25_000;
+    // 整体超时保护：45 秒超限返回降级结果
+    const PLAN_TIMEOUT_MS = 45_000;
     let planResponse;
     try {
       planResponse = await Promise.race([

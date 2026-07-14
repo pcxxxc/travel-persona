@@ -787,45 +787,78 @@
       ]));
     }
 
-    // 交通成本（异步加载）
+    // 交通成本（优先用后端返回的 transportCost，否则异步查询）
     var originName = state.plan && state.plan.tripContext && state.plan.tripContext.origin ? state.plan.tripContext.origin : '';
     if (originName && originName !== city.name) {
       var transportEl = el('div', { className: 'path-card__transport' }, [
         el('span', { className: 'path-card__transport-label', textContent: '往返交通' }),
-        el('span', { className: 'path-card__transport-loading', textContent: '查询中...' })
+        el('span', { className: 'path-card__transport-loading' })
       ]);
       card.appendChild(transportEl);
-      // 异步查询交通成本
-      apiCall('POST', '/transport/cost-estimate', { from: originName, to: city.name }).then(function (res) {
+
+      // 渲染交通数据的通用函数
+      function renderTransport(t) {
         if (!transportEl.isConnected) return;
         var textEl = transportEl.querySelector('.path-card__transport-loading');
         if (!textEl) return;
-        if (res.available) {
-          var durationText = res.durationHours.min + '-' + res.durationHours.max + '小时';
-          var fareText = '¥' + res.fareCny.min + '-' + res.fareCny.max;
-          textEl.className = '';
-          textEl.textContent = fareText + ' · ' + (res.mode === 'rail' ? '铁路' : res.mode) + ' ' + durationText;
+        if (!t) {
+          textEl.style.color = '#9CA3AF';
+          textEl.textContent = '暂无数据';
+          return;
+        }
+        if (t.source === 'baidu-map' && t.distanceKm && t.durationHours) {
+          textEl.textContent = t.distanceKm + 'km · 驾车约' + t.durationHours + '小时';
+          textEl.style.color = '';
+        } else if (t.source === 'static-baseline' && t.fareCny && t.durationHours) {
+          var durMin = t.durationHours.min || t.durationHours;
+          var durMax = t.durationHours.max || t.durationHours;
+          var durText = (durMin === durMax ? durMin + '小时' : durMin + '-' + durMax + '小时');
+          var fareText = '¥' + t.fareCny.min + '-' + t.fareCny.max;
+          textEl.textContent = fareText + ' · ' + (t.mode === 'rail' ? '铁路' : t.mode || '交通') + ' ' + durText;
+          textEl.style.color = '';
           // 叠加交通费用到总预算显示
           var costValueEl = card.querySelector('.path-card__cost-value');
           if (costValueEl && cost.totalMin != null && cost.totalMax != null) {
-            var newMin = cost.totalMin + res.fareCny.min;
-            var newMax = cost.totalMax + res.fareCny.max;
+            var newMin = cost.totalMin + (t.fareCny.min || 0);
+            var newMax = cost.totalMax + (t.fareCny.max || 0);
             costValueEl.textContent = formatCurrency(newMin) + ' - ' + formatCurrency(newMax) + '（含往返交通）';
           }
+        } else if (t.mode || t.distanceKm) {
+          var parts = [];
+          if (t.fareCny) parts.push('¥' + t.fareCny.min + '-' + t.fareCny.max);
+          if (t.distanceKm) parts.push(t.distanceKm + 'km');
+          if (typeof t.durationHours === 'number') parts.push((t.mode === 'rail' ? '铁路' : '驾车') + '约' + t.durationHours + '小时');
+          textEl.textContent = parts.join(' · ') || '暂无数据';
+          textEl.style.color = parts.length ? '' : '#9CA3AF';
         } else {
-          textEl.className = '';
           textEl.style.color = '#9CA3AF';
-          textEl.textContent = '数据待补充';
+          textEl.textContent = '暂无数据';
         }
-      }).catch(function () {
-        if (!transportEl.isConnected) return;
-        var textEl = transportEl.querySelector('.path-card__transport-loading');
-        if (textEl) {
-          textEl.className = '';
-          textEl.style.color = '#9CA3AF';
-          textEl.textContent = '查询失败';
-        }
-      });
+      }
+
+      // 优先使用后端返回的 transportCost
+      if (path.transportCost) {
+        renderTransport(path.transportCost);
+      } else {
+        // 后端未返回，异步查询作为降级
+        transportEl.querySelector('.path-card__transport-loading').textContent = '查询中...';
+        apiCall('POST', '/transport/cost-estimate', { from: originName, to: city.name }).then(function (res) {
+          if (!transportEl.isConnected) return;
+          if (res.available) {
+            renderTransport({
+              mode: res.mode,
+              fareCny: res.fareCny,
+              durationHours: res.durationHours,
+              source: 'static-api'
+            });
+          } else {
+            renderTransport(null);
+          }
+        }).catch(function () {
+          if (!transportEl.isConnected) return;
+          renderTransport(null);
+        });
+      }
     }
 
     // 反事实解释（总纲6.3）

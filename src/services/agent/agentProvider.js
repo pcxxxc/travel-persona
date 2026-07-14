@@ -168,7 +168,7 @@ class DeepSeekAgentProvider extends AgentProvider {
     this.apiKey = options.apiKey || process.env.DEEPSEEK_API_KEY || process.env.GLM_API_KEY;
     this.baseUrl = options.baseUrl || process.env.DEEPSEEK_BASE_URL || process.env.GLM_BASE_URL || 'https://api.deepseek.com/v1';
     this.model = options.model || process.env.DEEPSEEK_MODEL || process.env.GLM_MODEL || 'deepseek-chat';
-    this.timeout = options.timeout || 15000;
+    this.timeout = options.timeout || 30000;
     this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 2;
     this.breaker = options.breaker || getBreaker('deepseek-agent', {
       failureThreshold: 5,
@@ -415,7 +415,7 @@ class GLMAgentProvider extends AgentProvider {
     this.apiKey = options.apiKey || process.env.GLM_API_KEY;
     this.baseUrl = options.baseUrl || process.env.GLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4';
     this.model = options.model || process.env.GLM_MODEL || 'glm-4';
-    this.timeout = options.timeout || 15000;        // 15 秒超时
+    this.timeout = options.timeout || 30000;        // 30 秒超时
     this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 2; // 最多重试 2 次
     // 复用命名熔断器单例
     this.breaker = options.breaker || getBreaker('glm-agent', {

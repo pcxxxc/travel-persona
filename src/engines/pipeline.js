@@ -17,6 +17,7 @@
 const { getCities } = require('../data/cityRecords');
 const { localGeocode } = require('../services/map/nominatimProvider');
 const { getWeather } = require('../services/weather/weatherService');
+const { getActiveProvider } = require('../services/map/mapProvider');
 const { getTravelFriendliness } = require('../services/ops/holidayService');
 const { buildRouteExperiment } = require('../services/fallbackPlanner');
 const { buildGenericRouteExperiment } = require('../services/route/genericMultiCityPlanner');
@@ -148,13 +149,27 @@ async function generatePlan(input) {
   const localOrigin = allCities.find(city => city.name === originText || city.id === originText.toLowerCase());
   let originCoordinates = localOrigin?.coordinates || null;
   if (!originCoordinates && originText) {
-    // 纯离线：直接使用本地城市坐标（LOCAL_CITIES），不调用外网 geocode
-    const localHits = localGeocode(originText);
-    if (localHits?.[0]) {
-      originCoordinates = { lat: localHits[0].lat, lng: localHits[0].lng };
-      console.log(`[pipeline] 出发地使用本地坐标: ${originText}`);
-    } else {
-      console.warn(`[pipeline] 出发地未找到本地坐标: ${originText}`);
+    // 优先用百度地图 MCP geocode，失败则降级到本地
+    const mapProvider = getActiveProvider();
+    if (mapProvider && mapProvider.providerName !== 'mock') {
+      try {
+        const geoResult = await mapProvider.geocode(originText);
+        if (geoResult && geoResult.data) {
+          originCoordinates = { lat: geoResult.data.lat, lng: geoResult.data.lng };
+          console.log(`[pipeline] 出发地使用百度地图坐标: ${originText} (${originCoordinates.lat}, ${originCoordinates.lng})`);
+        }
+      } catch (geoErr) {
+        console.warn(`[pipeline] 百度地图 geocode 失败，降级到本地: ${geoErr.message}`);
+      }
+    }
+    if (!originCoordinates) {
+      const localHits = localGeocode(originText);
+      if (localHits?.[0]) {
+        originCoordinates = { lat: localHits[0].lat, lng: localHits[0].lng };
+        console.log(`[pipeline] 出发地使用本地坐标: ${originText}`);
+      } else {
+        console.warn(`[pipeline] 出发地未找到坐标: ${originText}`);
+      }
     }
   }
   const scoringContext = { ...effectiveTripContext, originCoordinates };
@@ -454,6 +469,59 @@ async function generatePlan(input) {
     if (originCoordinates) {
       dp.originCoordinates = originCoordinates;
     }
+  });
+
+  // --- 跨城交通数据查询（百度地图优先，静态数据降级）---
+  const mapProvider2 = getActiveProvider();
+  const transportData = {};
+  const staticConnections = require('../data/intercityConnections').INTERCITY_CONNECTIONS;
+  if (originCoordinates && mapProvider2 && mapProvider2.providerName !== 'mock') {
+    // 并行查询每条路径的交通数据
+    const routePromises = decisionPaths.map(async function (dp) {
+      if (!dp.city || !dp.city.coordinates) return;
+      try {
+        const routeResult = await mapProvider2.getRoute(
+          originCoordinates,
+          { lat: dp.city.coordinates.lat, lng: dp.city.coordinates.lng },
+          [], 'driving', { city: dp.city.name }
+        );
+        if (routeResult && routeResult.data) {
+          transportData[dp.type] = {
+            mode: 'driving',
+            distanceKm: routeResult.data.distance ? Math.round(routeResult.data.distance / 1000) : null,
+            durationHours: routeResult.data.duration ? +(routeResult.data.duration / 3600).toFixed(1) : null,
+            source: 'baidu-map'
+          };
+        }
+      } catch (routeErr) {
+        console.warn(`[pipeline] 百度路线查询失败 (${dp.city.name}): ${routeErr.message}`);
+      }
+    });
+    await Promise.all(routePromises);
+  }
+  // 补充静态铁路数据（百度驾车不包含火车，静态数据提供铁路选项）
+  if (originText) {
+    decisionPaths.forEach(function (dp) {
+      if (transportData[dp.type]) return; // 已有百度数据
+      const cityName = dp.city?.name;
+      if (!cityName) return;
+      const conn = staticConnections.find(c =>
+        (c.from === originText && c.to === cityName) || (c.from === cityName && c.to === originText)
+      );
+      if (conn) {
+        transportData[dp.type] = {
+          mode: conn.mode,
+          durationHours: { min: conn.durationHours.min, max: conn.durationHours.max },
+          fareCny: { min: conn.fareCny.min, max: conn.fareCny.max },
+          transfers: conn.transfers,
+          source: 'static-baseline'
+        };
+      }
+    });
+  }
+  // 注入交通数据到路径
+  decisionPaths.forEach(function (dp) {
+    dp.transportCost = transportData[dp.type] || null;
   });
 
   // --- 步骤 13: 构建最终响应 ---
