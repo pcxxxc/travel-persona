@@ -103,7 +103,54 @@
     container.appendChild(label);
   }
 
-  function drawBaiduMap(container, BMapGL, points, options) {
+  function loadLeafletScript() {
+    if (window.L) return Promise.resolve(window.L);
+    var s = document.createElement('script');
+    s.src = '/app/vendor/leaflet/leaflet.js';
+    document.head.appendChild(s);
+    return new Promise(function (resolve, reject) {
+      s.onload = function () { resolve(window.L); };
+      s.onerror = function () { reject(new Error('Leaflet SDK load failed')); };
+    });
+  }
+
+  function loadLeafletFallback(container, points, options) {
+    return loadLeafletScript().then(function (L) {
+      container.innerHTML = '';
+      container.style.minHeight = '240px';
+      var map = L.map(container).setView([points[0].lat, points[0].lng], options.zoom || 5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+      // 添加标记点
+      var validPts = points.map(function (p) {
+        if (p.lat && p.lng) return [p.lat, p.lng];
+        if (p.coordinates) return [p.coordinates.lat, p.coordinates.lng];
+        return null;
+      }).filter(Boolean);
+      validPts.forEach(function (coords, idx) {
+        L.marker(coords).addTo(map).bindPopup(points[idx].name || points[idx].city || '目的地');
+      });
+      // 添加出发地标记（不同颜色）
+      if (options.origin && options.origin.lat) {
+        L.circleMarker([options.origin.lat, options.origin.lng], {
+          radius: 8, fillColor: '#6366F1', color: '#fff', weight: 2, fillOpacity: 1
+        }).addTo(map).bindPopup('出发地');
+      }
+      if (validPts.length > 1) {
+        L.polyline(validPts, { color: '#2d6a4f', weight: 3, opacity: 0.8 }).addTo(map);
+        map.fitBounds(validPts, { padding: [30, 30] });
+      }
+      addSourceLabel(container);
+      return true;
+    }).catch(function () {
+      showFallback(container, '地图服务暂不可用，路线顺序仍已保留。');
+      return false;
+    });
+  }
+
+  function render(container, values, options) {
     container.classList.remove('plan-map--fallback');
     container.innerHTML = '';
     var map = new BMapGL.Map(container, { enableMapClick: false });
@@ -188,7 +235,8 @@
       })
       .catch(function () {
         if (currentRender === container.dataset.travelMapRender && container.isConnected) {
-          showFallback(container, '国内地图服务暂不可用，路线顺序仍已保留。');
+          // 百度地图加载失败，降级到 Leaflet + OSM
+          return loadLeafletFallback(container, points, options || {});
         }
         return false;
       });

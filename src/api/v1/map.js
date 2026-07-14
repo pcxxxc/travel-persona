@@ -230,7 +230,7 @@ async function enrichTransitLeg(provider, request, departureDate) {
 }
 
 router.get('/client-config', (req, res) => {
-  const baiduWebAk = String(process.env.BAIDU_WEB_AK || '').trim();
+  const baiduWebAk = String(process.env.BAIDU_WEB_AK || process.env.BAIDU_MAP_AK || '').trim();
   res.json({
     country: 'CN',
     displayProvider: baiduWebAk ? 'baidu-webgl' : 'route-fallback',
