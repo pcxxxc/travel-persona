@@ -101,7 +101,7 @@ function generateWeatherTip(forecast) {
   if (!forecast || !forecast.length) return null;
   const day = forecast[0];
   const tips = [];
-  if (day.precipitationProbability > 60) tips.push('建议携带雨具');
+  if (day.precipProb > 60) tips.push('建议携带雨具');
   if (day.tempMax > 35) tips.push('注意防暑降温');
   if (day.tempMin < 5) tips.push('注意保暖');
   if (day.windSpeed > 30) tips.push('户外活动注意防风');
