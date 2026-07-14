@@ -14,6 +14,9 @@
  * 5. API 路由接入 LLM 服务层
  */
 
+// 加载 .env 环境变量（必须在其他模块之前）
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
