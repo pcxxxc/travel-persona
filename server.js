@@ -492,6 +492,33 @@ app.use('/api/v1/map', v1MapRouter);
 app.use('/api/v1/transport', v1TransportRouter);
 app.use('/api/v1/telemetry', v1TelemetryRouter);
 
+// ===== 瓦片代理（解决客户端跨域和 TRAE 浏览器网络限制）=====
+const TILE_PROVIDERS = {
+  osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  amap: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+};
+app.get('/api/v1/map/tile/:provider/:z/:x/:y', async (req, res) => {
+  const { provider = 'amap', z, x, y } = req.params;
+  if (!z || !x || !y) return res.status(400).send('Missing z/x/y');
+  const subdomains = provider === 'amap' ? ['1','2','3','4'] : ['a','b','c'];
+  const subdomain = subdomains[Math.abs(parseInt(x) + parseInt(y)) % subdomains.length];
+  const urlTemplate = TILE_PROVIDERS[provider] || TILE_PROVIDERS.amap;
+  const url = urlTemplate.replace('{s}', subdomain).replace('{z}', z).replace('{x}', x).replace('{y}', y);
+  try {
+    const tileRes = await fetch(url, {
+      headers: { 'User-Agent': 'TravelPersona/2.1', Referer: 'http://localhost:3000/' }
+    });
+    if (!tileRes.ok) return res.status(tileRes.status).send('Tile not available');
+    const contentType = tileRes.headers.get('content-type') || 'image/png';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const buf = Buffer.from(await tileRes.arrayBuffer());
+    res.send(buf);
+  } catch (err) {
+    res.status(502).send('Tile fetch failed');
+  }
+});
+
 // ===== 静态文件服务 =====
 // 新版多路由应用（Phase 3）
 app.use('/app', express.static(path.join(__dirname, 'public-app')));

@@ -3,6 +3,7 @@
 
   var configPromise = null;
   var sdkPromise = null;
+  var leafletPromise = null;
   var renderId = 0;
 
   function getConfig() {
@@ -21,20 +22,33 @@
     if (sdkPromise) return sdkPromise;
 
     sdkPromise = new Promise(function (resolve, reject) {
+      // 先尝试直接加载 SDK 脚本
       var script = document.createElement('script');
       script.async = true;
       script.src = 'https://api.map.baidu.com/api?v=1.0&type=webgl&ak=' + encodeURIComponent(ak);
+      var resolved = false;
       var loadTimeout = setTimeout(function () {
-        reject(new Error('Baidu WebGL SDK load timeout (8s)'));
+        if (!resolved) { resolved = true; reject(new Error('Baidu WebGL SDK load timeout (8s)')); }
       }, 8000);
       script.onload = function () {
         clearTimeout(loadTimeout);
-        if (global.BMapGL) resolve(global.BMapGL);
-        else reject(new Error('Baidu WebGL SDK did not initialize'));
+        if (resolved) return;
+        // SDK 脚本加载后，BMapGL 可能需要额外时间初始化
+        var pollCount = 0;
+        var pollInterval = setInterval(function () {
+          pollCount++;
+          if (global.BMapGL) {
+            clearInterval(pollInterval);
+            if (!resolved) { resolved = true; resolve(global.BMapGL); }
+          } else if (pollCount > 20) {
+            clearInterval(pollInterval);
+            if (!resolved) { resolved = true; reject(new Error('BMapGL not available after script loaded')); }
+          }
+        }, 200);
       };
       script.onerror = function () {
         clearTimeout(loadTimeout);
-        reject(new Error('Baidu WebGL SDK load failed'));
+        if (!resolved) { resolved = true; reject(new Error('Baidu WebGL SDK script load error')); }
       };
       document.head.appendChild(script);
     });
@@ -42,7 +56,7 @@
   }
 
   function transformLat(lng, lat) {
-    var result = -100 + 2 * lng + 3 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng));
+    var result = -100 + 2 * lng + 3 * lat + 0.2 * lat * lat + 0.1 * lng * lng + 0.2 * Math.sqrt(Math.abs(lng));
     result += (20 * Math.sin(6 * lng * Math.PI) + 20 * Math.sin(2 * lng * Math.PI)) * 2 / 3;
     result += (20 * Math.sin(lat * Math.PI) + 40 * Math.sin(lat / 3 * Math.PI)) * 2 / 3;
     result += (160 * Math.sin(lat / 12 * Math.PI) + 320 * Math.sin(lat * Math.PI / 30)) * 2 / 3;
@@ -96,61 +110,15 @@
     container.appendChild(fallback);
   }
 
-  function addSourceLabel(container) {
+  function addSourceLabel(container, text) {
     var label = document.createElement('div');
     label.className = 'map-source-label';
-    label.textContent = '百度地图 · 中国大陆';
+    label.textContent = text || '百度地图 · 中国大陆';
     container.appendChild(label);
   }
 
-  function loadLeafletScript() {
-    if (window.L) return Promise.resolve(window.L);
-    var s = document.createElement('script');
-    s.src = '/app/vendor/leaflet/leaflet.js';
-    document.head.appendChild(s);
-    return new Promise(function (resolve, reject) {
-      s.onload = function () { resolve(window.L); };
-      s.onerror = function () { reject(new Error('Leaflet SDK load failed')); };
-    });
-  }
-
-  function loadLeafletFallback(container, points, options) {
-    return loadLeafletScript().then(function (L) {
-      container.innerHTML = '';
-      container.style.minHeight = '240px';
-      var map = L.map(container).setView([points[0].lat, points[0].lng], options.zoom || 5);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        attribution: '&copy; OpenStreetMap'
-      }).addTo(map);
-      // 添加标记点
-      var validPts = points.map(function (p) {
-        if (p.lat && p.lng) return [p.lat, p.lng];
-        if (p.coordinates) return [p.coordinates.lat, p.coordinates.lng];
-        return null;
-      }).filter(Boolean);
-      validPts.forEach(function (coords, idx) {
-        L.marker(coords).addTo(map).bindPopup(points[idx].name || points[idx].city || '目的地');
-      });
-      // 添加出发地标记（不同颜色）
-      if (options.origin && options.origin.lat) {
-        L.circleMarker([options.origin.lat, options.origin.lng], {
-          radius: 8, fillColor: '#6366F1', color: '#fff', weight: 2, fillOpacity: 1
-        }).addTo(map).bindPopup('出发地');
-      }
-      if (validPts.length > 1) {
-        L.polyline(validPts, { color: '#2d6a4f', weight: 3, opacity: 0.8 }).addTo(map);
-        map.fitBounds(validPts, { padding: [30, 30] });
-      }
-      addSourceLabel(container);
-      return true;
-    }).catch(function () {
-      showFallback(container, '地图服务暂不可用，路线顺序仍已保留。');
-      return false;
-    });
-  }
-
-  function render(container, values, options) {
+  /* ── 百度 WebGL 地图绘制 ── */
+  function drawBaiduMap(container, BMapGL, points, options) {
     container.classList.remove('plan-map--fallback');
     container.innerHTML = '';
     var map = new BMapGL.Map(container, { enableMapClick: false });
@@ -207,9 +175,71 @@
     } else {
       map.centerAndZoom(bdPoints[0], options.zoom || 11);
     }
-    addSourceLabel(container);
+    addSourceLabel(container, '百度地图 · 中国大陆');
   }
 
+  /* ── Leaflet + 高德瓦片降级 ── */
+  function loadLeafletScript() {
+    if (window.L) return Promise.resolve(window.L);
+    if (leafletPromise) return leafletPromise;
+    var s = document.createElement('script');
+    s.src = '/app/vendor/leaflet/leaflet.js';
+    document.head.appendChild(s);
+    leafletPromise = new Promise(function (resolve, reject) {
+      s.onload = function () { resolve(window.L); };
+      s.onerror = function () { reject(new Error('Leaflet SDK load failed')); };
+    });
+    return leafletPromise;
+  }
+
+  function loadLeafletFallback(container, points, options) {
+    return loadLeafletScript().then(function (L) {
+      container.innerHTML = '';
+      container.classList.remove('plan-map--fallback');
+      container.style.minHeight = '240px';
+
+      var first = points[0];
+      var map = L.map(container).setView([first.coordinates.lat, first.coordinates.lng], options.zoom || 6);
+
+      // 高德瓦片（通过本地代理，国内可用）
+      L.tileLayer('/api/v1/map/tile/amap/{z}/{x}/{y}', {
+        maxZoom: 18,
+        attribution: '&copy; 高德地图'
+      }).addTo(map);
+
+      // 目的地标记
+      var coordsList = [];
+      points.forEach(function (p) {
+        var latlng = [p.coordinates.lat, p.coordinates.lng];
+        coordsList.push(latlng);
+        L.marker(latlng).addTo(map).bindPopup(p.name || '目的地');
+      });
+
+      // 出发地标记（紫色圆点）
+      if (options.origin) {
+        var ov = validPoint(options.origin);
+        if (ov) {
+          L.circleMarker([ov.coordinates.lat, ov.coordinates.lng], {
+            radius: 8, fillColor: '#6366F1', color: '#fff', weight: 2, fillOpacity: 1
+          }).addTo(map).bindPopup('出发地');
+        }
+      }
+
+      // 连线
+      if (coordsList.length > 1) {
+        L.polyline(coordsList, { color: '#2d6a4f', weight: 3, opacity: 0.8 }).addTo(map);
+        map.fitBounds(coordsList, { padding: [30, 30] });
+      }
+
+      addSourceLabel(container, '高德地图 · 降级模式');
+      return true;
+    }).catch(function () {
+      showFallback(container, '地图服务暂不可用，路线顺序仍已保留。');
+      return false;
+    });
+  }
+
+  /* ── 统一入口 ── */
   function render(container, values, options) {
     var points = (values || []).map(validPoint).filter(Boolean);
     if (!container) return Promise.resolve(false);
@@ -219,12 +249,14 @@
     }
     var currentRender = String(++renderId);
     container.dataset.travelMapRender = currentRender;
+
+    // 优先百度 WebGL
     return getConfig()
       .then(function (config) {
         if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
         if (config.displayProvider !== 'baidu-webgl' || !config.baiduWebAk) {
-          showFallback(container, '国内地图服务暂未配置，已保留路线顺序。');
-          return false;
+          // 无百度 AK，直接降级 Leaflet
+          return loadLeafletFallback(container, points, options || {});
         }
         return loadBaiduWebGl(config.baiduWebAk)
           .then(function (BMapGL) {
@@ -235,7 +267,6 @@
       })
       .catch(function () {
         if (currentRender === container.dataset.travelMapRender && container.isConnected) {
-          // 百度地图加载失败，降级到 Leaflet + OSM
           return loadLeafletFallback(container, points, options || {});
         }
         return false;
