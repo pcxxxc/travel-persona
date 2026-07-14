@@ -57,6 +57,28 @@
     // 步骤指示器
     page.appendChild(renderStepIndicator(step));
 
+    // 首次引导提示
+    if (step === 1 && !global.localStorage.getItem('tp_hasSeenGuide')) {
+      var guideCard = el('div', { className: 'card guide-card mb-md' }, [
+        el('div', { className: 'guide-card__body' }, [
+          el('div', { className: 'guide-card__title', textContent: '初次见面，三步即可' }),
+          el('p', { className: 'guide-card__text', textContent: '先选心情 → 再选兴趣 → 最后填时间和预算。旅格会根据你的偏好生成三条不同风格的路线，不会一刀切。' })
+        ]),
+        el('button', {
+          type: 'button',
+          className: 'btn btn--text guide-card__close',
+          textContent: '知道了',
+          onClick: function () {
+            global.localStorage.setItem('tp_hasSeenGuide', '1');
+            guideCard.style.opacity = '0';
+            guideCard.style.transform = 'translateY(-8px)';
+            setTimeout(function () { guideCard.remove(); }, 240);
+          }
+        })
+      ]);
+      page.appendChild(guideCard);
+    }
+
     // 根据步骤渲染不同内容
     if (step === 1) {
       page.appendChild(renderMoodStep());
