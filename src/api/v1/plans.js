@@ -143,11 +143,34 @@ router.post('/', async (req, res) => {
         : freeTextSafety.sanitizedText
     };
 
-    const planResponse = await generatePlan({
-      personaProfile: trustedPersona.profile,
-      tripIntent: safeTripIntent,
-      tripContext
-    });
+    // 整体超时保护：25 秒超限返回降级结果
+    const PLAN_TIMEOUT_MS = 25_000;
+    let planResponse;
+    try {
+      planResponse = await Promise.race([
+        generatePlan({
+          personaProfile: trustedPersona.profile,
+          tripIntent: safeTripIntent,
+          tripContext
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Plan generation exceeded ${PLAN_TIMEOUT_MS}ms`)), PLAN_TIMEOUT_MS)
+        )
+      ]);
+    } catch (timeoutError) {
+      if (timeoutError.message.includes('exceeded')) {
+        console.error(`[plans] generatePlan 超时 (${PLAN_TIMEOUT_MS}ms)`);
+        return res.status(503).json({
+          code: 'TP-4003',
+          type: 'TIMEOUT',
+          message: 'Plan generation timed out',
+          userMessage: '方案生成超时，请稍后重试',
+          userVisible: true,
+          recoverable: true
+        });
+      }
+      throw timeoutError;
+    }
 
     planResponse.capability = {
       ...(planResponse.capability || {}),

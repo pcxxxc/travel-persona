@@ -15,7 +15,7 @@
  */
 
 const { getCities } = require('../data/cityRecords');
-const { geocode, localGeocode } = require('../services/map/nominatimProvider');
+const { localGeocode } = require('../services/map/nominatimProvider');
 const { getWeather } = require('../services/weather/weatherService');
 const { getTravelFriendliness } = require('../services/ops/holidayService');
 const { buildRouteExperiment } = require('../services/fallbackPlanner');
@@ -148,20 +148,13 @@ async function generatePlan(input) {
   const localOrigin = allCities.find(city => city.name === originText || city.id === originText.toLowerCase());
   let originCoordinates = localOrigin?.coordinates || null;
   if (!originCoordinates && originText) {
-    try {
-      const geocoded = await geocode(originText);
-      if (geocoded?.[0]) {
-        originCoordinates = { lat: geocoded[0].lat, lng: geocoded[0].lng };
-      }
-    } catch (error) {
-      console.warn(`[pipeline] 出发地解析失败，继续使用交通便利度降级评分: ${error.message}`);
-    }
-    // Fallback: 如果 geocode 全部失败，直接使用 LOCAL_CITIES
-    if (!originCoordinates) {
-      const localHits = localGeocode(originText);
-      if (localHits?.[0]) {
-        originCoordinates = { lat: localHits[0].lat, lng: localHits[0].lng };
-      }
+    // 纯离线：直接使用本地城市坐标（LOCAL_CITIES），不调用外网 geocode
+    const localHits = localGeocode(originText);
+    if (localHits?.[0]) {
+      originCoordinates = { lat: localHits[0].lat, lng: localHits[0].lng };
+      console.log(`[pipeline] 出发地使用本地坐标: ${originText}`);
+    } else {
+      console.warn(`[pipeline] 出发地未找到本地坐标: ${originText}`);
     }
   }
   const scoringContext = { ...effectiveTripContext, originCoordinates };

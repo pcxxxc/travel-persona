@@ -142,7 +142,11 @@ app.use('/api/v1', (req, res, next) => {
     return next();
   }
   const requestOrigin = getRequestOrigin(req);
-  if (!requestOrigin || !getAllowedOrigins().includes(requestOrigin)) {
+  // 无 Origin 头的请求视为同源请求，直接放行
+  if (!requestOrigin) {
+    return next();
+  }
+  if (!getAllowedOrigins().includes(requestOrigin)) {
     return res.status(403).json({
       code: 'TP-1403',
       type: 'AUTH',
