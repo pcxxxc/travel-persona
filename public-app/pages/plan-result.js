@@ -26,7 +26,6 @@
   var el = App.el;
   var state = App.state;
   var apiCall = App.apiCall;
-  var icon = App.icon;
   var PATH_TYPES = App.PATH_TYPES;
   var AVOIDS = App.AVOIDS;
   var renderLoadingState = App.renderLoadingState;
@@ -314,7 +313,7 @@
             var oldDot = iconWrap ? iconWrap.querySelector('.path-card__selection-dot') : null;
             if (isSel && oldDot) {
               oldDot.remove();
-              iconWrap.insertBefore(icon('check', 'path-card__selection-icon'), iconWrap.querySelector('span'));
+              iconWrap.insertBefore(App.icon('check', 'path-card__selection-icon'), iconWrap.querySelector('span'));
             } else if (!isSel && oldIcon) {
               oldIcon.remove();
               iconWrap.insertBefore(el('span', { className: 'path-card__selection-dot' }), iconWrap.querySelector('span'));
@@ -400,7 +399,7 @@
           ]),
           el('p', { className: 'sampling-note', textContent: note })
         ]),
-        icon('map', 'map-section__icon')
+        App.icon('map', 'map-section__icon')
       ]),
       el('div', { id: 'plan-map', className: 'plan-map' }, [
         el('div', { className: 'plan-map__fallback', textContent: '正在载入地图…' })
@@ -412,16 +411,9 @@
     ]);
   }
 
-  // ========== 瓦片层配置（百度优先 + 免Key降级）==========
+  // ========== 瓦片层配置 ==========
 
   var TILE_SOURCES = [
-    {
-      name: '百度地图',
-      url: 'http://online{s}.map.bdimg.com/onlinelabel/?qt=tile&x={x}&y={y}&z={z}&styles=pl&scaler=1&p=1',
-      subdomains: '0123456789',
-      tms: true,
-      attribution: '&copy; 百度地图'
-    },
     {
       name: 'OpenStreetMap',
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -448,8 +440,7 @@
       currentLayer = global.L.tileLayer(src.url, {
         maxZoom: 18,
         attribution: src.attribution,
-        subdomains: src.subdomains,
-        tms: !!src.tms
+        subdomains: src.subdomains
       });
       currentLayer.on('tileerror', function () {
         errorCount++;
@@ -736,7 +727,7 @@
     // 路径类型标签
     card.appendChild(el('div', { className: 'path-card__badge', textContent: typeInfo.label }));
     card.appendChild(el('div', { className: 'path-card__selection' }, [
-      selected ? icon('check', 'path-card__selection-icon') : el('span', { className: 'path-card__selection-dot' }),
+      selected ? App.icon('check', 'path-card__selection-icon') : el('span', { className: 'path-card__selection-dot' }),
       el('span', { textContent: selected ? '当前选择' : '选择这条' })
     ]));
 
@@ -899,7 +890,7 @@
           title: '关闭',
           'aria-label': '关闭日程详情',
           onClick: function () { dialog.close(); }
-        }, [icon('x', 'icon-button__icon')])
+        }, [App.icon('x', 'icon-button__icon')])
       ]),
       contentArea,
       el('div', { className: 'itinerary-dialog__footer' }, [
