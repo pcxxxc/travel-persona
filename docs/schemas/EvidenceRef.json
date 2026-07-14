@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/EvidenceRef.json",
+  "title": "EvidenceRef",
+  "description": "证据引用 -- 每条影响推荐或人格的数据都必须可追溯到来源。总纲7.2定义了证据可靠度先验值。",
+  "type": "object",
+  "required": ["id", "type", "source", "reliability"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "证据唯一ID"
+    },
+    "type": {
+      "$ref": "SharedEnums.json#/definitions/EvidenceType",
+      "description": "证据类型"
+    },
+    "source": {
+      "type": "string",
+      "description": "数据来源标识（如 trip:abc123, survey:xyz, map:baidu, expert:human-reviewer）"
+    },
+    "reliability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "证据可靠度先验，参考总纲7.2证据等级表。范围: 0.15(照片) ~ 1.00(用户明确纠正)"
+    },
+    "excluded": {
+      "type": "boolean",
+      "default": false,
+      "description": "用户是否已排除此证据"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "证据有效期（社区信号等有到期时间）"
+    },
+    "dimensionImpact": {
+      "type": "object",
+      "description": "此证据影响的维度及方向（可选，用于人格更新提案展示）",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "traitKey": { "$ref": "SharedEnums.json#/definitions/TraitKey" },
+          "direction": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+          "magnitude": { "type": "number", "minimum": 0, "maximum": 0.08, "description": "单维最大变化0.08，总纲7.3" }
+        }
+      }
+    }
+  }
+}

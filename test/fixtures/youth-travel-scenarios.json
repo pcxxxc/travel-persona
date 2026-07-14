@@ -1,0 +1,100 @@
+[
+  {
+    "id": "quiet_restore",
+    "profile": {
+      "mood": "restore",
+      "interests": ["nature", "coffee"],
+      "avoid": ["crowd", "early"],
+      "days": 7,
+      "budget": 450,
+      "companion": "solo",
+      "freeText": "最近很累，想安静一点，不赶路"
+    },
+    "expectedPersona": "安静恢复型",
+    "expectedTopCities": ["大理", "丽江", "厦门", "济南"]
+  },
+  {
+    "id": "social_novelty",
+    "profile": {
+      "mood": "social",
+      "interests": ["food", "hidden"],
+      "avoid": ["expensive"],
+      "days": 5,
+      "budget": 400,
+      "companion": "friends",
+      "freeText": "想认识新朋友，也想有点没体验过的东西"
+    },
+    "expectedPersona": "城市电量型",
+    "expectedTopCities": ["武汉", "成都", "南京", "重庆"]
+  },
+  {
+    "id": "culture_clarity",
+    "profile": {
+      "mood": "inspire",
+      "interests": ["museum", "oldtown"],
+      "avoid": ["commercial", "crowd"],
+      "days": 6,
+      "budget": 500,
+      "companion": "solo",
+      "freeText": "想更清楚自己真正向往什么"
+    },
+    "expectedPersona": "街巷考古型",
+    "expectedTopCities": ["太原", "南京", "武汉", "泉州", "洛阳", "北京"]
+  },
+  {
+    "id": "local_living",
+    "profile": {
+      "mood": "live",
+      "interests": ["coffee", "food"],
+      "avoid": ["longTransit"],
+      "days": 10,
+      "budget": 550,
+      "companion": "solo",
+      "freeText": "想在一个城市生活几天，我不是为了成长才旅游"
+    },
+    "expectedPersona": "松弛试住型",
+    "expectedTopCities": ["成都", "杭州", "厦门", "大理"]
+  },
+  {
+    "id": "budget_departure",
+    "profile": {
+      "mood": "escape",
+      "interests": ["food", "oldtown"],
+      "avoid": ["expensive", "commercial"],
+      "days": 4,
+      "budget": 280,
+      "companion": "solo",
+      "freeText": "出发了就是值得的，但预算很紧"
+    },
+    "expectedPersona": "街巷考古型",
+    "expectedTopCities": ["福州", "泉州", "武汉", "长沙"]
+  },
+  {
+    "id": "aesthetic_sampling",
+    "profile": {
+      "mood": "inspire",
+      "interests": ["art", "photo"],
+      "avoid": ["crowd"],
+      "days": 5,
+      "budget": 650,
+      "companion": "two",
+      "freeText": "想看展和建筑，慢慢拍照"
+    },
+    "expectedPersona": "审美采样型",
+    "expectedTopCities": ["深圳", "杭州", "上海", "苏州"]
+  },
+  {
+    "id": "family_low_load",
+    "profile": {
+      "mood": "restore",
+      "interests": ["museum", "food"],
+      "avoid": ["climb", "early"],
+      "days": 6,
+      "budget": 700,
+      "companion": "family",
+      "freeText": "家人同行，不赶早班，不爬山"
+    },
+    "expectedPersona": "松弛试住型",
+    "expectedTopCities": ["成都", "苏州", "杭州", "泉州", "武汉"]
+  }
+]

@@ -1,0 +1,271 @@
+'use strict';
+
+const express = require('express');
+const router = express.Router();
+const { getActiveProvider } = require('../../services/map/mapProvider');
+const { getCityByName } = require('../../data/cityRecords');
+const contentSafety = require('../../services/ops/contentSafety');
+const { bd09ToWgs84 } = require('../../services/map/coordinateSystems');
+const monitoring = require('../../services/ops/monitoring');
+
+const MAX_CITIES = 12;
+const MAX_POIS = 12;
+const MAX_TRANSIT_LEGS = 10;
+
+function uniqueStrings(values, limit) {
+  return Array.from(new Set((Array.isArray(values) ? values : [])
+    .map(value => String(value || '').trim())
+    .filter(Boolean)))
+    .slice(0, limit);
+}
+
+function normalizePoiRequests(values) {
+  const seen = new Set();
+  return (Array.isArray(values) ? values : [])
+    .map(item => ({
+      city: String(item?.city || '').trim(),
+      name: String(item?.name || '').trim()
+    }))
+    .filter(item => {
+      const key = `${item.city}::${item.name}`;
+      if (!item.city || !item.name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, MAX_POIS);
+}
+
+function normalizeTransitRequests(values) {
+  const seen = new Set();
+  return (Array.isArray(values) ? values : [])
+    .map(item => ({ from: String(item?.from || '').trim(), to: String(item?.to || '').trim() }))
+    .filter(item => {
+      const key = `${item.from}::${item.to}`;
+      if (!item.from || !item.to || item.from === item.to || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, MAX_TRANSIT_LEGS);
+}
+
+function normalizeDepartureDate(value) {
+  const date = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`)) ? date : '';
+}
+
+async function mapWithConcurrency(values, limit, mapper) {
+  const output = new Array(values.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < values.length) {
+      const index = cursor;
+      cursor += 1;
+      output[index] = await mapper(values[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()));
+  return output;
+}
+
+function normalizeName(value) {
+  return String(value || '').replace(/[\s·•（）()\-—_]/g, '').toLowerCase();
+}
+
+function choosePoi(results, expectedName) {
+  const expected = normalizeName(expectedName);
+  let best = null;
+  let bestScore = 0;
+  for (const item of Array.isArray(results) ? results : []) {
+    const actual = normalizeName(item.name);
+    const score = actual === expected ? 3
+      : actual.includes(expected) || expected.includes(actual) ? 2
+        : 0;
+    if (score > bestScore) {
+      best = item;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+async function enrichCity(provider, name) {
+  const local = getCityByName(name);
+  const fallback = {
+    name,
+    coordinates: local?.coordinates || null,
+    verified: false,
+    source: 'snapshot'
+  };
+  if (provider.name !== 'baidu') return fallback;
+
+  try {
+    const result = await provider.geocode(name);
+    if (!result?.data || !Number.isFinite(result.data.lat) || !Number.isFinite(result.data.lng)) return fallback;
+    const wgs84 = bd09ToWgs84(result.data.lng, result.data.lat);
+    return {
+      name,
+      coordinates: { lat: wgs84.lat, lng: wgs84.lng },
+      verified: true,
+      source: result.source || 'baidu',
+      sourceCrs: 'bd09',
+      outputCrs: 'wgs84',
+      fetchedAt: result.fetchedAt
+    };
+  } catch (error) {
+    console.warn(`[map/enrich] 城市 ${name} 核验失败: ${error.message}`);
+    return fallback;
+  }
+}
+
+async function enrichPoi(provider, request) {
+  if (provider.name !== 'baidu') {
+    return { ...request, verified: false, source: 'snapshot' };
+  }
+
+  try {
+    const search = await provider.searchPOI(request.name, { city: request.city, pageSize: 5 });
+    const match = choosePoi(search?.data, request.name);
+    if (!match) return { ...request, verified: false, source: 'snapshot' };
+
+    let detail = null;
+    if (match.id) {
+      try {
+        detail = (await provider.getPOIDetail(match.id))?.data || null;
+      } catch (_) {
+        detail = null;
+      }
+    }
+    const merged = { ...match, ...(detail || {}) };
+    const wgs84 = Number.isFinite(merged.lat) && Number.isFinite(merged.lng)
+      ? bd09ToWgs84(merged.lng, merged.lat)
+      : null;
+    return {
+      city: request.city,
+      name: request.name,
+      matchedName: merged.name,
+      coordinates: wgs84 ? { lat: wgs84.lat, lng: wgs84.lng } : null,
+      address: merged.address || '',
+      openHours: merged.openHours || '',
+      verified: true,
+      source: search.source || 'baidu',
+      sourceCrs: 'bd09',
+      outputCrs: 'wgs84',
+      fetchedAt: search.fetchedAt
+    };
+  } catch (error) {
+    console.warn(`[map/enrich] 地点 ${request.city}/${request.name} 核验失败: ${error.message}`);
+    return { ...request, verified: false, source: 'snapshot' };
+  }
+}
+
+async function enrichTransitLeg(provider, request, departureDate) {
+  const fallback = {
+    ...request,
+    departureDate: departureDate || null,
+    verified: false,
+    source: 'snapshot',
+    status: departureDate ? 'provider_unavailable' : 'date_required'
+  };
+  if (provider.name !== 'baidu' || !departureDate) return fallback;
+
+  try {
+    const [origin, destination] = await Promise.all([
+      provider.geocode(request.from),
+      provider.geocode(request.to)
+    ]);
+    if (!origin?.data || !destination?.data) return fallback;
+    const routeResult = await provider.getRoute(
+      { lat: origin.data.lat, lng: origin.data.lng },
+      { lat: destination.data.lat, lng: destination.data.lng },
+      [],
+      'transit',
+      {
+        departureDate,
+        departureTime: '06:00-22:00',
+        tacticsIncity: 1,
+        tacticsIntercity: 0,
+        transTypeIntercity: 0,
+        pageSize: 3
+      }
+    );
+    const alternatives = (routeResult?.data?.alternatives || []).filter(item => Number(item.duration) > 0);
+    if (!alternatives.length) return fallback;
+    const durations = alternatives.map(item => Number(item.duration) / 3600);
+    const prices = alternatives.map(item => Number(item.price)).filter(value => value > 0);
+    const preferred = alternatives[0];
+    const serviceNames = Array.from(new Set(alternatives.flatMap(item =>
+      (item.vehicles || []).filter(vehicle => [1, 2, 6].includes(vehicle.type)).map(vehicle => vehicle.name).filter(Boolean)
+    ))).slice(0, 6);
+    return {
+      ...request,
+      departureDate,
+      verified: true,
+      source: routeResult.source || 'baidu',
+      status: 'verified',
+      durationHours: {
+        min: Math.round(Math.min(...durations) * 10) / 10,
+        max: Math.round(Math.max(...durations) * 10) / 10
+      },
+      fareCny: prices.length ? {
+        min: Math.round(Math.min(...prices)),
+        max: Math.round(Math.max(...prices))
+      } : null,
+      transfers: Math.min(...alternatives.map(item => Number(item.transfers) || 0)),
+      serviceNames,
+      departureStation: preferred.vehicles?.find(item => [1, 2, 6].includes(item.type))?.departureStation || '',
+      arrivalStation: [...(preferred.vehicles || [])].reverse().find(item => [1, 2, 6].includes(item.type))?.arrivalStation || '',
+      fetchedAt: routeResult.fetchedAt
+    };
+  } catch (error) {
+    console.warn(`[map/enrich] 跨城 ${request.from}/${request.to} 核验失败: ${error.message}`);
+    return fallback;
+  }
+}
+
+router.post('/enrich-plan', async (req, res) => {
+  const cities = uniqueStrings(req.body?.cities, MAX_CITIES);
+  const pois = normalizePoiRequests(req.body?.pois);
+  const transitRequests = normalizeTransitRequests(req.body?.transitLegs);
+  const departureDate = normalizeDepartureDate(req.body?.departureDate);
+  if (!cities.length && !pois.length && !transitRequests.length) {
+    return res.status(400).json({
+      code: 'TP-1006',
+      type: 'VALIDATION',
+      message: '至少提供一个城市或地点',
+      userVisible: false
+    });
+  }
+
+  const provider = getActiveProvider();
+  const [cityFacts, poiFacts, transitFacts] = await Promise.all([
+    Promise.all(cities.map(name => enrichCity(provider, name))),
+    Promise.all(pois.map(item => enrichPoi(provider, item))),
+    mapWithConcurrency(transitRequests, 2, item => enrichTransitLeg(provider, item, departureDate))
+  ]);
+  const verifiedCities = cityFacts.filter(item => item.verified).length;
+  const verifiedPois = poiFacts.filter(item => item.verified).length;
+  const verifiedTransitLegs = transitFacts.filter(item => item.verified).length;
+  const mapFreshness = provider.name === 'baidu' && (verifiedCities > 0 || verifiedPois > 0)
+    ? 'live'
+    : 'snapshot';
+
+  monitoring.recordMetric('map_freshness_ratio', mapFreshness === 'live' ? 1 : 0, {
+    endpoint: '/api/v1/map/enrich-plan', provider: provider.name, mode: mapFreshness
+  });
+
+  res.json(contentSafety.sanitizeOutputValue({
+    mapFreshness,
+    cities: cityFacts,
+    pois: poiFacts,
+    transitLegs: transitFacts,
+    verifiedCities,
+    verifiedPois,
+    verifiedTransitLegs,
+    transitFreshness: verifiedTransitLegs > 0 ? 'live' : departureDate ? 'snapshot' : 'date-required',
+    departureDate: departureDate || null,
+    checkedAt: new Date().toISOString(),
+    userVisibleFailure: false
+  }));
+});
+
+module.exports = router;

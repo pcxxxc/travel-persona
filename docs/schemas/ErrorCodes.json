@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/ErrorCodes.json",
+  "title": "ErrorCodes",
+  "description": "旅格统一错误码体系 -- 前后端与Agent共用。核心原则：用户端不得展示'降级模式''fallback'等工程状态（总纲1.5）。",
+  "definitions": {
+    "TravelError": {
+      "type": "object",
+      "required": ["code", "type", "message", "userVisible"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^TP-\\d{4}$",
+          "description": "错误码格式: TP-NNNN"
+        },
+        "type": {
+          "$ref": "SharedEnums.json#/definitions/ErrorType",
+          "description": "错误大类"
+        },
+        "message": {
+          "type": "string",
+          "description": "内部技术描述"
+        },
+        "userMessage": {
+          "type": "string",
+          "description": "用户可见的简化描述，不得包含工程术语（如'降级模式''fallback''Agent超时'）"
+        },
+        "userVisible": {
+          "type": "boolean",
+          "description": "是否对用户可见。内部错误（如Agent校验失败）应为false"
+        },
+        "recoverable": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否可恢复"
+        },
+        "context": {
+          "type": "object",
+          "description": "附加上下文信息（仅内部日志使用）"
+        },
+        "traceId": {
+          "type": "string",
+          "description": "追踪ID，用于关联完整请求链路"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,431 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "回到旅格规划台" [ref=e3] [cursor=pointer]:
+      - /url: "#planner"
+      - generic [ref=e4]: 旅格
+      - generic [ref=e5]: Travel Persona
+    - navigation "页面导航" [ref=e6]:
+      - link "分析" [ref=e7] [cursor=pointer]:
+        - /url: "#planner"
+      - link "推荐" [ref=e8] [cursor=pointer]:
+        - /url: "#results"
+      - link "地图" [ref=e9] [cursor=pointer]:
+        - /url: "#map"
+      - link "API" [ref=e10] [cursor=pointer]:
+        - /url: "#api"
+  - main [ref=e11]:
+    - region "不是再给你一串城市名，而是先判断你现在适合怎样出走。" [ref=e12]:
+      - generic [ref=e14]:
+        - paragraph [ref=e15]: Persona first, map verified
+        - heading "不是再给你一串城市名，而是先判断你现在适合怎样出走。" [level=1] [ref=e16]
+        - paragraph [ref=e17]: 旅格会把情绪、预算、节奏、避雷点和真实目的地属性放在同一个决策模型里，给出能解释、能落地、能接地图的旅行计划。
+        - generic "推荐信号概览" [ref=e18]:
+          - generic [ref=e19]: 人格向量
+          - generic [ref=e20]: 地图 POI
+          - generic [ref=e21]: 避坑过滤
+          - generic [ref=e22]: 行程约束
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - paragraph [ref=e26]: Step 01
+            - heading "旅行人格取样" [level=2] [ref=e27]
+          - button "试一组样例" [ref=e28] [cursor=pointer]
+        - group "你这次旅行最想解决什么？" [ref=e29]:
+          - generic [ref=e30]: 你这次旅行最想解决什么？
+          - generic [ref=e31]:
+            - button "放空恢复" [ref=e32] [cursor=pointer]
+            - button "逃离压力" [ref=e33] [cursor=pointer]
+            - button "灵感采集" [ref=e34] [cursor=pointer]
+            - button "热闹社交" [ref=e35] [cursor=pointer]
+            - button "效率打卡" [ref=e36] [cursor=pointer]
+            - button "试住一城" [ref=e37] [cursor=pointer]
+        - group "你会被哪些场景吸引？" [ref=e38]:
+          - generic [ref=e39]: 你会被哪些场景吸引？
+          - generic [ref=e40]:
+            - generic [ref=e41] [cursor=pointer]:
+              - checkbox "自然山海"
+              - text: 自然山海
+            - generic [ref=e42] [cursor=pointer]:
+              - checkbox "老城街巷" [checked]
+              - text: 老城街巷
+            - generic [ref=e43] [cursor=pointer]:
+              - checkbox "艺术展览" [checked]
+              - text: 艺术展览
+            - generic [ref=e44] [cursor=pointer]:
+              - checkbox "咖啡书店" [checked]
+              - text: 咖啡书店
+            - generic [ref=e45] [cursor=pointer]:
+              - checkbox "夜市美食"
+              - text: 夜市美食
+            - generic [ref=e46] [cursor=pointer]:
+              - checkbox "建筑摄影" [checked]
+              - text: 建筑摄影
+            - generic [ref=e47] [cursor=pointer]:
+              - checkbox "博物馆"
+              - text: 博物馆
+            - generic [ref=e48] [cursor=pointer]:
+              - checkbox "小众探索" [checked]
+              - text: 小众探索
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - text: 计划天数
+              - strong [ref=e52]: 4 天
+            - slider "计划天数 4 天" [ref=e53]: "4"
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - text: 日均预算
+              - strong [ref=e56]: 560 元
+            - slider "日均预算 560 元" [ref=e192]: "560"
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - text: 出发城市
+            - textbox "出发城市" [ref=e60]:
+              - /placeholder: 例如：上海、北京、杭州
+              - text: 上海
+          - generic [ref=e61]:
+            - text: 同行关系
+            - combobox "同行关系" [ref=e62]:
+              - option "一个人" [selected]
+              - option "两个人"
+              - option "朋友局"
+              - option "家庭出行"
+        - group "这次必须避开的体验" [ref=e63]:
+          - generic [ref=e64]: 这次必须避开的体验
+          - generic [ref=e65]:
+            - generic [ref=e66] [cursor=pointer]:
+              - checkbox "人多排队" [checked]
+              - text: 人多排队
+            - generic [ref=e67] [cursor=pointer]:
+              - checkbox "过度商业化" [checked]
+              - text: 过度商业化
+            - generic [ref=e68] [cursor=pointer]:
+              - checkbox "爬山消耗"
+              - text: 爬山消耗
+            - generic [ref=e69] [cursor=pointer]:
+              - checkbox "早起赶路" [checked]
+              - text: 早起赶路
+            - generic [ref=e70] [cursor=pointer]:
+              - checkbox "长交通换乘"
+              - text: 长交通换乘
+            - generic [ref=e71] [cursor=pointer]:
+              - checkbox "溢价消费"
+              - text: 溢价消费
+        - generic [ref=e72]:
+          - text: 再补一句你的真实想法
+          - textbox "再补一句你的真实想法" [ref=e73]:
+            - /placeholder: 例如：最近很累，但又不想完全躺平，希望有一点美术馆、好咖啡和能散步的地方。
+            - text: 最近很累，但希望这趟旅行不是纯躺平。想看一点展、喝好咖啡、拍到有质感的街区，也不想一直排队。
+        - generic [ref=e74]:
+          - button "生成认真版推荐" [ref=e75] [cursor=pointer]
+          - button "重置" [ref=e76] [cursor=pointer]
+    - region "让用户看见自己正在被分析" [ref=e77]:
+      - generic [ref=e78]:
+        - paragraph [ref=e79]: Step 02
+        - heading "让用户看见自己正在被分析" [level=2] [ref=e80]
+        - paragraph [ref=e81]: 推荐不会瞬间跳出答案，而是展示证据、冲突、置信度和权衡，让结果更像一次真实的旅行咨询。
+      - generic [ref=e82]:
+        - article [ref=e83]:
+          - heading "人格向量" [level=3] [ref=e84]
+          - generic [ref=e85]:
+            - generic [ref=e450]:
+              - generic [ref=e451]: 恢复需求
+              - strong [ref=e454]: "94"
+            - generic [ref=e455]:
+              - generic [ref=e456]: 自然偏好
+              - strong [ref=e459]: "50"
+            - generic [ref=e460]:
+              - generic [ref=e461]: 文化深度
+              - strong [ref=e464]: "95"
+            - generic [ref=e465]:
+              - generic [ref=e466]: 烟火美食
+              - strong [ref=e469]: "50"
+            - generic [ref=e470]:
+              - generic [ref=e471]: 行动节奏
+              - strong [ref=e474]: "8"
+            - generic [ref=e475]:
+              - generic [ref=e476]: 社交密度
+              - strong [ref=e479]: "20"
+            - generic [ref=e480]:
+              - generic [ref=e481]: 预算弹性
+              - strong [ref=e484]: "56"
+            - generic [ref=e485]:
+              - generic [ref=e486]: 审美出片
+              - strong [ref=e489]: "95"
+            - generic [ref=e490]:
+              - generic [ref=e491]: 舒适安全
+              - strong [ref=e494]: "95"
+            - generic [ref=e495]:
+              - generic [ref=e496]: 新鲜探索
+              - strong [ref=e499]: "95"
+        - article [ref=e136]:
+          - heading "推理过程" [level=3] [ref=e137]
+          - list [ref=e138]:
+            - listitem [ref=e139]: 读取选择与原话
+            - listitem [ref=e140]: 生成旅行人格向量
+            - listitem [ref=e141]: 叠加预算、天数与避坑约束
+            - listitem [ref=e142]: 匹配地图 POI 与路线密度
+            - listitem [ref=e143]: 输出可解释目的地
+        - article [ref=e144]:
+          - heading "系统判断" [level=3] [ref=e145]
+          - generic [ref=e146]:
+            - paragraph [ref=e500]: 你的主画像是「安静恢复型」，置信度来自核心动机、场景偏好、避雷项和原话交叉验证。
+            - paragraph [ref=e501]: 你明确排斥拥挤，推荐排序已降低强网红城市和高排队 POI 的权重。
+            - paragraph [ref=e502]: 你的原话被作为软信号处理，不会覆盖硬约束，但会影响审美、节奏和避坑排序。
+            - paragraph [ref=e503]: 当前 Top 1 是苏州，不是因为单项最高，而是人格、预算、天数、避雷和地图密度综合最稳。
+    - region "推荐目的地" [ref=e148]:
+      - generic [ref=e149]:
+        - paragraph [ref=e150]: Step 03
+        - heading "推荐目的地" [level=2] [ref=e151]
+        - paragraph [ref=e152]: 每个推荐都包含匹配分、推荐原因、不推荐原因、避坑提示和地图入口。
+      - generic [ref=e153]:
+        - generic [ref=e154]:
+          - paragraph [ref=e504]: Persona result
+          - heading "安静恢复型" [level=3] [ref=e505]
+          - paragraph [ref=e506]: 你不是不想玩，而是需要一个不会持续消耗你的地方。好的行程应该留出空白、散步和随时撤退的余地。
+          - generic [ref=e507]: 分析置信度 92%
+          - generic [ref=e508]:
+            - generic [ref=e509]: 动机：灵感采集
+            - generic [ref=e510]: 场景：老城街巷 / 艺术展览 / 咖啡书店 / 建筑摄影 / 小众探索
+            - generic [ref=e511]: 避雷：人多排队 / 过度商业化 / 早起赶路
+            - generic [ref=e512]: 链路：本地引擎已完成，智能体可选增强
+        - generic [ref=e256]:
+          - article [ref=e513]:
+            - generic [ref=e514]:
+              - generic [ref=e515]: "01"
+              - generic [ref=e516]:
+                - heading "苏州" [level=3] [ref=e517]
+                - paragraph [ref=e518]: 江苏 · 日均约 430 元 · 建议 2-4 天
+              - strong [ref=e519]: 92%
+            - paragraph [ref=e520]: 你这次的核心信号是灵感采集，苏州在文化深度上和你贴合度最高；同时它的江南审美、园林博物馆能支撑一条不草率的 4 天路线。
+            - generic [ref=e521]:
+              - generic [ref=e522]: 江南审美
+              - generic [ref=e523]: 园林博物馆
+              - generic [ref=e524]: 低压周末
+            - generic [ref=e525]:
+              - generic [ref=e526]:
+                - generic [ref=e527]: 最适配
+                - strong [ref=e528]: 文化深度
+              - generic [ref=e529]:
+                - generic [ref=e530]: 需要确认
+                - strong [ref=e531]: 你介意人多排队，这里需要错峰或替换路线。
+            - generic [ref=e532]:
+              - button "查看行程" [ref=e533] [cursor=pointer]
+              - link "百度地图" [ref=e534] [cursor=pointer]:
+                - /url: https://api.map.baidu.com/place/search?query=%E8%8B%8F%E5%B7%9E%E5%B9%B3%E6%B1%9F%E8%B7%AF&region=%E8%8B%8F%E5%B7%9E&output=html&src=webapp.travel-persona
+          - article [ref=e535]:
+            - generic [ref=e536]:
+              - generic [ref=e537]: "02"
+              - generic [ref=e538]:
+                - heading "杭州" [level=3] [ref=e539]
+                - paragraph [ref=e540]: 浙江 · 日均约 520 元 · 建议 2-4 天
+              - strong [ref=e541]: 91%
+            - paragraph [ref=e542]: 你这次的核心信号是灵感采集，杭州在恢复需求上和你贴合度最高；同时它的审美出片、短途周末能支撑一条不草率的 4 天路线。
+            - generic [ref=e543]:
+              - generic [ref=e544]: 审美出片
+              - generic [ref=e545]: 短途周末
+              - generic [ref=e546]: 自然和城市兼有
+            - generic [ref=e547]:
+              - generic [ref=e548]:
+                - generic [ref=e549]: 最适配
+                - strong [ref=e550]: 恢复需求
+              - generic [ref=e551]:
+                - generic [ref=e552]: 需要确认
+                - strong [ref=e553]: 你介意人多排队，这里需要错峰或替换路线。
+            - generic [ref=e554]:
+              - button "查看行程" [ref=e555] [cursor=pointer]
+              - link "百度地图" [ref=e556] [cursor=pointer]:
+                - /url: https://api.map.baidu.com/place/search?query=%E6%9D%AD%E5%B7%9E%E8%A5%BF%E6%B9%96&region=%E6%9D%AD%E5%B7%9E&output=html&src=webapp.travel-persona
+          - article [ref=e557]:
+            - generic [ref=e558]:
+              - generic [ref=e559]: "03"
+              - generic [ref=e560]:
+                - heading "青岛" [level=3] [ref=e561]
+                - paragraph [ref=e562]: 山东 · 日均约 430 元 · 建议 2-4 天
+              - strong [ref=e563]: 90%
+            - paragraph [ref=e564]: 你这次的核心信号是灵感采集，青岛在恢复需求上和你贴合度最高；同时它的海边城市、建筑散步能支撑一条不草率的 4 天路线。
+            - generic [ref=e565]:
+              - generic [ref=e566]: 海边城市
+              - generic [ref=e567]: 建筑散步
+              - generic [ref=e568]: 夏季短途
+            - generic [ref=e569]:
+              - generic [ref=e570]:
+                - generic [ref=e571]: 最适配
+                - strong [ref=e572]: 恢复需求
+              - generic [ref=e573]:
+                - generic [ref=e574]: 需要确认
+                - strong [ref=e575]: 你介意人多排队，这里需要错峰或替换路线。
+            - generic [ref=e576]:
+              - button "查看行程" [ref=e577] [cursor=pointer]
+              - link "百度地图" [ref=e578] [cursor=pointer]:
+                - /url: https://api.map.baidu.com/place/search?query=%E9%9D%92%E5%B2%9B%E5%85%AB%E5%A4%A7%E5%85%B3&region=%E9%9D%92%E5%B2%9B&output=html&src=webapp.travel-persona
+          - article [ref=e579]:
+            - generic [ref=e580]:
+              - generic [ref=e581]: "04"
+              - generic [ref=e582]:
+                - heading "大理" [level=3] [ref=e583]
+                - paragraph [ref=e584]: 云南 · 日均约 340 元 · 建议 3-7 天
+              - strong [ref=e585]: 90%
+            - paragraph [ref=e586]: 你这次的核心信号是灵感采集，大理在恢复需求上和你贴合度最高；同时它的放空恢复、试住一城能支撑一条不草率的 4 天路线。
+            - generic [ref=e587]:
+              - generic [ref=e588]: 放空恢复
+              - generic [ref=e589]: 试住一城
+              - generic [ref=e590]: 自然散步
+            - generic [ref=e591]:
+              - generic [ref=e592]:
+                - generic [ref=e593]: 最适配
+                - strong [ref=e594]: 恢复需求
+              - generic [ref=e595]:
+                - generic [ref=e596]: 需要确认
+                - strong [ref=e597]: 你介意过度商业化，这里需要错峰或替换路线。
+            - generic [ref=e598]:
+              - button "查看行程" [ref=e599] [cursor=pointer]
+              - link "百度地图" [ref=e600] [cursor=pointer]:
+                - /url: https://api.map.baidu.com/place/search?query=%E5%A4%A7%E7%90%86%E5%8F%A4%E5%9F%8E&region=%E5%A4%A7%E7%90%86&output=html&src=webapp.travel-persona
+    - region "落地行程" [ref=e156]:
+      - generic [ref=e157]:
+        - paragraph [ref=e158]: Step 04
+        - heading "落地行程" [level=2] [ref=e159]
+        - paragraph [ref=e160]: 默认生成 Top 1 城市的可执行路线，也可以在推荐卡片中切换城市。
+      - generic [ref=e161]:
+        - generic [ref=e601]:
+          - generic [ref=e602]:
+            - paragraph [ref=e603]: Selected city
+            - heading "杭州 · 4 天计划" [level=3] [ref=e604]
+          - strong [ref=e605]: 本地消费约 2080 元
+        - generic [ref=e606]:
+          - article [ref=e607]:
+            - heading "D1 · 抵达与校准节奏" [level=4] [ref=e608]
+            - generic [ref=e609]:
+              - generic [ref=e610]:
+                - time [ref=e611]: 10:00
+                - generic [ref=e612]: 西湖苏堤 · 清晨体验远好于午后
+              - generic [ref=e613]:
+                - time [ref=e614]: 12:30
+                - generic [ref=e615]: 在住宿区域附近用餐，减少跨区移动（武林/湖滨/黄龙，交通稳定，不必执着住湖边）
+              - generic [ref=e616]:
+                - time [ref=e617]: 15:00
+                - generic [ref=e618]: 中国美术学院象山校区 · 适合建筑和空间采样
+              - generic [ref=e619]:
+                - time [ref=e620]: 19:30
+                - generic [ref=e621]: 保留自由晚间，不强排第二轮打卡
+            - generic [ref=e622]: 雨天或临时疲惫时，替换为：良渚博物院。
+          - article [ref=e623]:
+            - heading "D2 · 深入一个区域" [level=4] [ref=e624]
+            - generic [ref=e625]:
+              - generic [ref=e626]:
+                - time [ref=e627]: 10:00
+                - generic [ref=e628]: 良渚博物院 · 远但值得，适合深度文化线
+              - generic [ref=e629]:
+                - time [ref=e630]: 12:30
+                - generic [ref=e631]: 在住宿区域附近用餐，减少跨区移动（武林/湖滨/黄龙，交通稳定，不必执着住湖边）
+              - generic [ref=e632]:
+                - time [ref=e633]: 15:00
+                - generic [ref=e634]: 龙井村 · 别把餐饮期待拉太高
+              - generic [ref=e635]:
+                - time [ref=e636]: 19:30
+                - generic [ref=e637]: 按体力选择夜景、咖啡或回酒店整理照片
+            - generic [ref=e638]: 雨天或临时疲惫时，替换为：天目里。
+          - article [ref=e639]:
+            - heading "D3 · 深入一个区域" [level=4] [ref=e640]
+            - generic [ref=e641]:
+              - generic [ref=e642]:
+                - time [ref=e643]: 10:00
+                - generic [ref=e644]: 天目里 · 展览、书店、建筑集中
+              - generic [ref=e645]:
+                - time [ref=e646]: 12:30
+                - generic [ref=e647]: 在住宿区域附近用餐，减少跨区移动（武林/湖滨/黄龙，交通稳定，不必执着住湖边）
+              - generic [ref=e648]:
+                - time [ref=e649]: 15:00
+                - generic [ref=e650]: 西湖苏堤 · 清晨体验远好于午后
+              - generic [ref=e651]:
+                - time [ref=e652]: 19:30
+                - generic [ref=e653]: 保留自由晚间，不强排第二轮打卡
+            - generic [ref=e654]: 雨天或临时疲惫时，替换为：中国美术学院象山校区。
+          - article [ref=e655]:
+            - heading "D4 · 收束与低风险补完" [level=4] [ref=e656]
+            - generic [ref=e657]:
+              - generic [ref=e658]:
+                - time [ref=e659]: 10:00
+                - generic [ref=e660]: 中国美术学院象山校区 · 适合建筑和空间采样
+              - generic [ref=e661]:
+                - time [ref=e662]: 12:30
+                - generic [ref=e663]: 在住宿区域附近用餐，减少跨区移动（武林/湖滨/黄龙，交通稳定，不必执着住湖边）
+              - generic [ref=e664]:
+                - time [ref=e665]: 15:00
+                - generic [ref=e666]: 良渚博物院 · 远但值得，适合深度文化线
+              - generic [ref=e667]:
+                - time [ref=e668]: 19:30
+                - generic [ref=e669]: 按体力选择夜景、咖啡或回酒店整理照片
+            - generic [ref=e670]: 雨天或临时疲惫时，替换为：龙井村。
+        - generic [ref=e671]: 西湖核心线节假日拥挤明显，清晨和雨后体验更好；灵隐寺需提前看预约和交通管制
+    - region "百度地图接入位" [ref=e163]:
+      - generic [ref=e164]:
+        - paragraph [ref=e165]: Step 05
+        - heading "百度地图接入位" [level=2] [ref=e166]
+        - paragraph [ref=e167]: 当前版本使用百度地图 URI 免 AK 调起，商业版可在同一接口替换为 JavaScript API GL。
+      - generic [ref=e168]:
+        - generic [ref=e169]:
+          - generic [ref=e672]:
+            - paragraph [ref=e673]: Baidu map preview
+            - heading "杭州" [level=3] [ref=e674]
+            - paragraph [ref=e675]: 武林/湖滨/黄龙，交通稳定，不必执着住湖边
+          - link "西湖苏堤 自然 · 150min" [ref=e676] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.2448,120.139&title=%E8%A5%BF%E6%B9%96%E8%8B%8F%E5%A0%A4&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E6%B8%85%E6%99%A8%E4%BD%93%E9%AA%8C%E8%BF%9C%E5%A5%BD%E4%BA%8E%E5%8D%88%E5%90%8E&output=html&src=webapp.travel-persona
+            - strong [ref=e677]: 西湖苏堤
+            - generic [ref=e678]: 自然 · 150min
+          - link "中国美术学院象山校区 建筑 · 120min" [ref=e679] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.1525,120.0779&title=%E4%B8%AD%E5%9B%BD%E7%BE%8E%E6%9C%AF%E5%AD%A6%E9%99%A2%E8%B1%A1%E5%B1%B1%E6%A0%A1%E5%8C%BA&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E9%80%82%E5%90%88%E5%BB%BA%E7%AD%91%E5%92%8C%E7%A9%BA%E9%97%B4%E9%87%87%E6%A0%B7&output=html&src=webapp.travel-persona
+            - strong [ref=e680]: 中国美术学院象山校区
+            - generic [ref=e681]: 建筑 · 120min
+          - link "良渚博物院 博物馆 · 180min" [ref=e682] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.3888,120.0391&title=%E8%89%AF%E6%B8%9A%E5%8D%9A%E7%89%A9%E9%99%A2&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E8%BF%9C%E4%BD%86%E5%80%BC%E5%BE%97%EF%BC%8C%E9%80%82%E5%90%88%E6%B7%B1%E5%BA%A6%E6%96%87%E5%8C%96%E7%BA%BF&output=html&src=webapp.travel-persona
+            - strong [ref=e683]: 良渚博物院
+            - generic [ref=e684]: 博物馆 · 180min
+          - link "龙井村 自然 · 160min" [ref=e685] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.2228,120.1022&title=%E9%BE%99%E4%BA%95%E6%9D%91&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E5%88%AB%E6%8A%8A%E9%A4%90%E9%A5%AE%E6%9C%9F%E5%BE%85%E6%8B%89%E5%A4%AA%E9%AB%98&output=html&src=webapp.travel-persona
+            - strong [ref=e686]: 龙井村
+            - generic [ref=e687]: 自然 · 160min
+          - link "天目里 艺术 · 120min" [ref=e688] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.2893,120.0944&title=%E5%A4%A9%E7%9B%AE%E9%87%8C&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E5%B1%95%E8%A7%88%E3%80%81%E4%B9%A6%E5%BA%97%E3%80%81%E5%BB%BA%E7%AD%91%E9%9B%86%E4%B8%AD&output=html&src=webapp.travel-persona
+            - strong [ref=e689]: 天目里
+            - generic [ref=e690]: 艺术 · 120min
+        - generic [ref=e173]:
+          - link "西湖苏堤 西湖 · 清晨体验远好于午后" [ref=e691] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.2448,120.139&title=%E8%A5%BF%E6%B9%96%E8%8B%8F%E5%A0%A4&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E6%B8%85%E6%99%A8%E4%BD%93%E9%AA%8C%E8%BF%9C%E5%A5%BD%E4%BA%8E%E5%8D%88%E5%90%8E&output=html&src=webapp.travel-persona
+            - strong [ref=e692]: 西湖苏堤
+            - generic [ref=e693]: 西湖 · 清晨体验远好于午后
+          - link "中国美术学院象山校区 转塘 · 适合建筑和空间采样" [ref=e694] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.1525,120.0779&title=%E4%B8%AD%E5%9B%BD%E7%BE%8E%E6%9C%AF%E5%AD%A6%E9%99%A2%E8%B1%A1%E5%B1%B1%E6%A0%A1%E5%8C%BA&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E9%80%82%E5%90%88%E5%BB%BA%E7%AD%91%E5%92%8C%E7%A9%BA%E9%97%B4%E9%87%87%E6%A0%B7&output=html&src=webapp.travel-persona
+            - strong [ref=e695]: 中国美术学院象山校区
+            - generic [ref=e696]: 转塘 · 适合建筑和空间采样
+          - link "良渚博物院 余杭 · 远但值得，适合深度文化线" [ref=e697] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.3888,120.0391&title=%E8%89%AF%E6%B8%9A%E5%8D%9A%E7%89%A9%E9%99%A2&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E8%BF%9C%E4%BD%86%E5%80%BC%E5%BE%97%EF%BC%8C%E9%80%82%E5%90%88%E6%B7%B1%E5%BA%A6%E6%96%87%E5%8C%96%E7%BA%BF&output=html&src=webapp.travel-persona
+            - strong [ref=e698]: 良渚博物院
+            - generic [ref=e699]: 余杭 · 远但值得，适合深度文化线
+          - link "龙井村 西湖 · 别把餐饮期待拉太高" [ref=e700] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.2228,120.1022&title=%E9%BE%99%E4%BA%95%E6%9D%91&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E5%88%AB%E6%8A%8A%E9%A4%90%E9%A5%AE%E6%9C%9F%E5%BE%85%E6%8B%89%E5%A4%AA%E9%AB%98&output=html&src=webapp.travel-persona
+            - strong [ref=e701]: 龙井村
+            - generic [ref=e702]: 西湖 · 别把餐饮期待拉太高
+          - link "天目里 西湖 · 展览、书店、建筑集中" [ref=e703] [cursor=pointer]:
+            - /url: https://api.map.baidu.com/marker?location=30.2893,120.0944&title=%E5%A4%A9%E7%9B%AE%E9%87%8C&content=%E6%9D%AD%E5%B7%9E%20%C2%B7%20%E5%B1%95%E8%A7%88%E3%80%81%E4%B9%A6%E5%BA%97%E3%80%81%E5%BB%BA%E7%AD%91%E9%9B%86%E4%B8%AD&output=html&src=webapp.travel-persona
+            - strong [ref=e704]: 天目里
+            - generic [ref=e705]: 西湖 · 展览、书店、建筑集中
+    - region "智能体与数据接口" [ref=e174]:
+      - generic [ref=e175]:
+        - paragraph [ref=e176]: Production hooks
+        - heading "智能体与数据接口" [level=2] [ref=e177]
+        - paragraph [ref=e178]: 前端已经把智能体、地图、口碑爬取和行程润色拆成接口，后续接真实服务时不用改页面结构。
+      - generic [ref=e179]:
+        - article [ref=e180]:
+          - heading "Agent Planner" [level=3] [ref=e181]
+          - paragraph [ref=e182]: 接入大模型后负责读取人格画像、问答追问、行程润色和实时调整。
+          - code [ref=e183]: POST /api/agent/plan
+        - article [ref=e184]:
+          - heading "Map Provider" [level=3] [ref=e185]
+          - paragraph [ref=e186]: 当前使用百度地图 URI；拿到 AK 后可切换为 JSAPI GL 渲染真实地图。
+          - code [ref=e187]: GET /api/map/pois?city=...
+        - article [ref=e188]:
+          - heading "Community Signals" [level=3] [ref=e189]
+          - paragraph [ref=e190]: 预留小红书/携程/大众点评等口碑信号清洗入口，过滤排队、溢价、闭店和季节性踩雷。
+          - code [ref=e191]: POST /api/research/signals

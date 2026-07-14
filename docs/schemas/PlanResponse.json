@@ -1,0 +1,328 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/PlanResponse.json",
+  "title": "PlanResponse",
+  "description": "统一规划响应 -- 本地规划器与Agent输出同构。总纲11.4。前端始终接收此统一格式，内部可记录agentApplied但不得传入用户界面文案层。",
+  "type": "object",
+  "required": ["planId", "personaSnapshot", "decisionPaths", "generatedAt", "dataVersion", "capability"],
+  "additionalProperties": false,
+  "properties": {
+    "planId": {
+      "type": "string",
+      "description": "规划请求唯一ID"
+    },
+    "personaSnapshot": {
+      "$ref": "#/definitions/PersonaSnapshot",
+      "description": "规划时使用的人格快照"
+    },
+    "decisionPaths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": { "$ref": "#/definitions/DecisionPath" },
+      "description": "三条决策路径：人格本选、现实平衡、低成本方案。可选第四条：新方向。总纲7.6。"
+    },
+    "selectedPlan": {
+      "oneOf": [
+        { "$ref": "#/definitions/ExecutablePlan" },
+        { "type": "null" }
+      ],
+      "description": "用户选择的计划（用户在比较页选择后填充）"
+    },
+    "multiCityPlan": {
+      "oneOf": [
+        { "$ref": "#/definitions/MultiCityPlan" },
+        { "type": "null" }
+      ],
+      "description": "长线多城请求的路线骨架；普通单城推荐为 null"
+    },
+    "explanations": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Explanation" },
+      "description": "推荐解释，总纲7.7可解释性要求"
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "EvidenceRef.json" },
+      "description": "支持此推荐的证据引用列表"
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Uncertainty" },
+      "description": "不确定项，总纲6.7：置信度低时系统明确表达不确定"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "dataVersion": {
+      "$ref": "Versioning.json#/definitions/DataVersion",
+      "description": "数据版本快照，总纲9.7"
+    },
+    "capability": {
+      "$ref": "#/definitions/Capability",
+      "description": "当前能力状态（地图、天气、Agent）"
+    },
+    "realTimeData": {
+      "type": "object",
+      "description": "已验证的天气和节假日摘要；不可用时字段为空"
+    },
+    "rankingStability": {
+      "type": "object",
+      "description": "排序稳定性与波动性摘要"
+    }
+  },
+  "definitions": {
+    "PersonaSnapshot": {
+      "type": "object",
+      "description": "规划时使用的人格快照",
+      "properties": {
+        "traits": {
+          "type": "object",
+          "description": "16维人格快照值"
+        },
+        "primaryPersona": {
+          "type": "object",
+          "description": "主原型展示信息"
+        },
+        "secondaryPersona": {
+          "oneOf": [{ "type": "object" }, { "type": "null" }],
+          "description": "次原型展示信息"
+        },
+        "confidence": {
+          "type": "number",
+          "description": "整体置信度"
+        },
+        "basis": {
+          "type": "string",
+          "enum": ["current-trip-cold-start", "profile-and-current-trip"]
+        }
+      }
+    },
+    "DecisionPath": {
+      "type": "object",
+      "required": ["type", "city", "totalScore", "personaFit", "costEstimate", "reason"],
+      "properties": {
+        "type": { "$ref": "SharedEnums.json#/definitions/DecisionPathType" },
+        "city": {
+          "type": "object",
+          "description": "推荐城市/目的地信息（Phase 1 细化为 CityBrief Schema）",
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "province": { "type": "string" },
+            "coordinates": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": ["lat", "lng"],
+                  "properties": {
+                    "lat": { "type": "number" },
+                    "lng": { "type": "number" }
+                  }
+                },
+                { "type": "null" }
+              ]
+            },
+            "coverageTier": {
+              "oneOf": [
+                { "type": "string", "enum": ["A", "B", "C", "D"] },
+                { "type": "null" }
+              ]
+            }
+          }
+        },
+        "totalScore": {
+          "type": "number",
+          "description": "综合效用分数，总纲7.5"
+        },
+        "personaFit": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "人格匹配度。主推荐默认要求 >= 0.62（总纲7.4保护门槛）"
+        },
+        "costEstimate": {
+          "$ref": "#/definitions/CostEstimate",
+          "description": "成本估算"
+        },
+        "reason": {
+          "type": "string",
+          "description": "适合你的理由"
+        },
+        "watchOut": {
+          "type": "string",
+          "description": "不适合或需要付出的代价"
+        },
+        "counterfactual": {
+          "type": "string",
+          "description": "反事实解释，如'如果把预算降低15%会怎样'，总纲6.3"
+        },
+        "breakdown": {
+          "type": "object",
+          "description": "分数分解，总纲7.5多目标基础分",
+          "properties": {
+            "personaFit": { "type": "number", "description": "0.28权重" },
+            "tripIntentFit": { "type": "number", "description": "0.18权重" },
+            "contextFit": { "type": "number", "description": "0.16权重" },
+            "routeEfficiency": { "type": "number", "description": "0.14权重" },
+            "evidenceQuality": { "type": "number", "description": "0.10权重" },
+            "resilience": { "type": "number", "description": "0.08权重" },
+            "novelty": { "type": "number", "description": "0.06权重" },
+            "riskPenalty": { "type": "number", "description": "风险扣分" }
+          }
+        }
+      }
+    },
+    "CostEstimate": {
+      "type": "object",
+      "description": "成本估算",
+      "properties": {
+        "totalMin": { "type": "number", "description": "最低估算" },
+        "totalMax": { "type": "number", "description": "最高估算" },
+        "currency": { "type": "string", "default": "CNY" },
+        "mostUncertain": { "type": "string", "description": "最不确定的部分" }
+      }
+    },
+    "Explanation": {
+      "type": "object",
+      "description": "推荐解释，总纲7.7要求每次推荐必须回答5个问题",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["whyFit", "evidence", "uncertainty", "cost", "counterfactual"],
+          "description": "解释类型"
+        },
+        "content": { "type": "string" },
+        "evidenceIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "Uncertainty": {
+      "type": "object",
+      "description": "不确定项",
+      "properties": {
+        "field": { "type": "string" },
+        "level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "reason": { "type": "string" },
+        "improveAction": { "type": "string", "description": "提高准确度的方法" }
+      }
+    },
+    "ExecutablePlan": {
+      "type": "object",
+      "description": "可执行计划（Phase 1 细化）",
+      "properties": {
+        "planId": { "type": "string" },
+        "days": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "dayIndex": { "type": "integer" },
+              "nodes": { "type": "array", "items": { "type": "object" } }
+            }
+          }
+        }
+      }
+    },
+    "MultiCityPlan": {
+      "type": "object",
+      "required": ["title", "summary", "origin", "destination", "totalDays", "primary"],
+      "properties": {
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "origin": { "type": "string" },
+        "destination": { "type": "string" },
+        "totalDays": { "type": "number" },
+        "routeModel": {
+          "type": "string",
+          "description": "多城路线生成模型；人工走廊可省略，通用路线当前为 generic-corridor-v2"
+        },
+        "selectedVariantId": { "type": "string" },
+        "budgetModel": { "type": "object" },
+        "primary": {
+          "type": "object",
+          "required": ["name", "nodes"],
+          "properties": {
+            "name": { "type": "string" },
+            "valueScore": { "type": "number" },
+            "efficiencyScore": { "type": "number" },
+            "nodes": { "type": "array", "items": { "type": "object" } }
+          }
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "nodes", "totalDays", "costRange"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "tagline": { "type": "string" },
+              "tradeoff": { "type": "string" },
+              "totalDays": { "type": "number" },
+              "moveCount": { "type": "number" },
+              "bufferDays": { "type": "number" },
+              "recommended": { "type": "boolean" },
+              "costRange": {
+                "type": "object",
+                "required": ["min", "max"],
+                "properties": {
+                  "min": { "type": "number" },
+                  "max": { "type": "number" }
+                }
+              },
+              "nodes": { "type": "array", "items": { "type": "object" } }
+            }
+          }
+        },
+        "alternatives": { "type": "array", "items": { "type": "object" } },
+        "redFlags": { "type": "array", "items": { "type": "string" } },
+        "cutPlan": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "Capability": {
+      "type": "object",
+      "description": "当前能力状态。总纲11.2：无感切换的真实含义是保证相同页面结构和字段合同。",
+      "properties": {
+        "mapFreshness": {
+          "type": "string",
+          "enum": ["live", "cached", "snapshot", "unavailable"],
+          "description": "地图数据新鲜度"
+        },
+        "weatherFreshness": {
+          "type": "string",
+          "enum": ["live", "cached", "unavailable"],
+          "description": "天气数据新鲜度"
+        },
+        "agentApplied": {
+          "type": "boolean",
+          "description": "Agent 是否贡献了增强内容。注意：此字段仅内部使用，不得传入用户界面文案层。"
+        },
+        "personaSource": {
+          "type": "string",
+          "enum": ["server-confirmed", "cold-start", "non-personalized"],
+          "description": "长期旅格在本次推荐中的可信来源状态"
+        },
+        "acceptedTraitCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16,
+          "description": "本次实际采用的已确认长期旅格维度数量"
+        },
+        "personalizationApplied": {
+          "type": "boolean",
+          "description": "本次是否实际采用了长期旅格"
+        },
+        "subDimensions": { "type": "boolean" },
+        "confidencePropagation": { "type": "boolean" },
+        "temporalAwareness": { "type": "boolean" },
+        "sensitivityAnalysis": { "type": "boolean" },
+        "routeOptimization": { "type": "boolean" }
+      }
+    }
+  }
+}

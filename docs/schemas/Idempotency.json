@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/Idempotency.json",
+  "title": "Idempotency",
+  "description": "幂等规则 -- 所有写接口必须支持幂等键。总纲13.6：所有写接口必须支持幂等键，所有响应必须通过共享 schema 校验。",
+  "definitions": {
+    "IdempotentRequest": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "format": "uuid",
+          "description": "客户端生成的幂等键，服务端去重。相同key的重复请求返回首次结果。"
+        }
+      }
+    },
+    "IdempotentResponse": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "description": "回传客户端的幂等键"
+        },
+        "firstProcessedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "首次处理时间（重复请求时返回首次时间）"
+        },
+        "isReplay": {
+          "type": "boolean",
+          "description": "是否为重复请求的回放结果"
+        }
+      }
+    }
+  }
+}

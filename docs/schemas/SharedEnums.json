@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/SharedEnums.json",
+  "title": "SharedEnums",
+  "description": "旅格共享枚举与常量定义 -- 所有维度key、决策路径类型和证据可靠度先验值的唯一来源。对应总纲3.2（16维）、7.2（证据等级）。",
+  "definitions": {
+    "TraitKey": {
+      "type": "string",
+      "enum": ["restoration", "nature", "culture", "food", "pace", "social", "budget", "aesthetics", "comfort", "novelty", "transit", "lowCrowd", "authenticity", "weatherFlex", "bookingEase", "workation"],
+      "description": "16维人格维度key，总纲3.2定义"
+    },
+    "MoodType": {
+      "type": "string",
+      "enum": ["restore", "escape", "inspire", "social", "efficient", "live"],
+      "description": "6种旅行动机类型，对应冷启动第一步"
+    },
+    "InterestType": {
+      "type": "string",
+      "enum": ["nature", "oldtown", "art", "coffee", "food", "photo", "museum", "hidden"],
+      "description": "兴趣标签类型"
+    },
+    "AvoidType": {
+      "type": "string",
+      "enum": ["crowd", "commercial", "climb", "early", "longTransit", "expensive"],
+      "description": "避坑标签类型"
+    },
+    "CompanionType": {
+      "type": "string",
+      "enum": ["solo", "couple", "friends", "family", "group"],
+      "description": "同行关系类型"
+    },
+    "DecisionPathType": {
+      "type": "string",
+      "enum": ["personaBest", "balanced", "lowCost", "newDirection"],
+      "description": "三条决策路径类型，总纲7.6"
+    },
+    "EvidenceType": {
+      "type": "string",
+      "enum": ["userCorrection", "tripReview", "confirmedTrip", "statedPreference", "repeatedAction", "visit", "cancellation", "favorite", "photo", "journalEntry", "mapData", "communitySignal", "weatherData", "expertAnnotation"],
+      "description": "14种证据类型，总纲7.2"
+    },
+    "ErrorType": {
+      "type": "string",
+      "enum": ["VALIDATION", "DATA", "ALGORITHM", "LLM", "NETWORK", "AUTH", "PERMISSION", "SENSITIVITY", "RATE_LIMIT", "UNKNOWN"],
+      "description": "10种错误类型"
+    }
+  },
+  "properties": {
+    "TRAIT_KEYS": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/TraitKey" },
+      "description": "16维人格维度key列表"
+    },
+    "LEGACY_SIX_DIMS": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["freedom", "social", "explore", "nature", "pace", "budget"]
+      },
+      "description": "已弃用的旧6维，仅用于迁移兼容，参见 docs/migration/six-to-sixteen-dimensions.md"
+    }
+  }
+}

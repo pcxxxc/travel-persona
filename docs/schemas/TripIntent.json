@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/TripIntent.json",
+  "title": "TripIntent",
+  "description": "当次旅行取向 -- 这次想怎样度过、为何出发。总纲3.1 Trip Intent 层。不直接改变长期人格。",
+  "type": "object",
+  "required": ["mood"],
+  "additionalProperties": false,
+  "properties": {
+    "mood": {
+      "$ref": "SharedEnums.json#/definitions/MoodType",
+      "description": "核心动机，对应总纲5.1冷启动第一步：这次想怎样度过"
+    },
+    "moodLabel": {
+      "type": "string",
+      "description": "展示用中文标签"
+    },
+    "interests": {
+      "type": "array",
+      "items": { "$ref": "SharedEnums.json#/definitions/InterestType" },
+      "description": "兴趣标签"
+    },
+    "avoid": {
+      "type": "array",
+      "items": { "$ref": "SharedEnums.json#/definitions/AvoidType" },
+      "description": "避坑标签"
+    },
+    "freeText": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "用户自由表达的旅行愿望。敏感内容必须先经过隐私分流。"
+    },
+    "companion": {
+      "$ref": "SharedEnums.json#/definitions/CompanionType",
+      "default": "solo",
+      "description": "同行关系"
+    },
+    "destination": {
+      "type": "string",
+      "description": "用户指定的必须到达城市（硬约束）"
+    }
+  }
+}

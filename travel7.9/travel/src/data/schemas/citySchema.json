@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://travel-persona.dev/schemas/city.json",
+  "title": "城市数据 Schema",
+  "description": "旅格 Travel Persona 城市知识库中每个城市的数据结构定义",
+  "type": "object",
+  "required": ["id", "name", "dimensions", "emotionTags", "pois"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "城市唯一标识，如 'dali'、'chengdu'",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "minLength": 2,
+      "maxLength": 30
+    },
+    "name": {
+      "type": "string",
+      "description": "城市显示名称，如 '大理'、'成都'",
+      "minLength": 1,
+      "maxLength": 20
+    },
+    "dimensions": {
+      "type": "object",
+      "description": "六维城市向量，与用户 PersonaScore 同构，用于加权欧氏距离匹配",
+      "required": ["freedom", "social", "explore", "nature", "pace", "budget"],
+      "properties": {
+        "freedom": {
+          "type": "number",
+          "description": "自由探索度（0=高度结构化，1=高度自由）",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "social": {
+          "type": "number",
+          "description": "社交/热闹属性（0=安静独处，1=热闹社交）",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "explore": {
+          "type": "number",
+          "description": "深度探索/小众属性（0=大众热门，1=小众独特）",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "nature": {
+          "type": "number",
+          "description": "自然/户外属性（0=纯都市，1=纯自然）",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "pace": {
+          "type": "number",
+          "description": "节奏快慢（0=极慢，1=极快）",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "budget": {
+          "type": "number",
+          "description": "消费水平（0=极低消费，1=极高消费）",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "emotionTags": {
+      "type": "array",
+      "description": "情绪标签，用于前端展示和模糊匹配",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 10
+      },
+      "minItems": 1,
+      "maxItems": 10
+    },
+    "pois": {
+      "type": "array",
+      "description": "精选真实 POI（兴趣点），每城 6-10 个",
+      "items": {
+        "$ref": "#/definitions/poi"
+      },
+      "minItems": 4,
+      "maxItems": 15
+    }
+  },
+  "definitions": {
+    "poi": {
+      "type": "object",
+      "required": ["name", "zone", "type", "openHours", "indoor"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "POI 名称，如 '洱海生态廊道'",
+          "minLength": 1
+        },
+        "zone": {
+          "type": "string",
+          "description": "所属区域，如 '洱海西岸'、'古城'，用于 zone 聚类",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "description": "POI 类型：自然/街区/文化/美食/室内/夜市/其他",
+          "enum": ["自然", "街区", "文化", "美食", "室内", "夜市", "其他"]
+        },
+        "openHours": {
+          "type": "string",
+          "description": "营业时间，如 '10:00-22:00' 或 '全天'",
+          "pattern": "^(全天|\\d{1,2}:\\d{2}-\\d{1,2}:\\d{2})$"
+        },
+        "indoor": {
+          "type": "boolean",
+          "description": "是否室内（雨天替换用）"
+        },
+        "note": {
+          "type": "string",
+          "description": "备注，如 '骑行、发呆、看云'",
+          "maxLength": 50
+        }
+      }
+    }
+  }
+}

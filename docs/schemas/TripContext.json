@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/TripContext.json",
+  "title": "TripContext",
+  "description": "现实状态 -- 预算、天数、出发地等现实条件。总纲3.1 Trip Context 层。算法不得因为现实条件改变长期人格。",
+  "type": "object",
+  "required": ["days"],
+  "additionalProperties": false,
+  "properties": {
+    "origin": {
+      "type": "string",
+      "description": "出发城市"
+    },
+    "days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60,
+      "description": "旅行天数"
+    },
+    "budget": {
+      "$ref": "#/definitions/BudgetElasticity",
+      "description": "预算弹性，总纲5.3。算法不得从一个数字猜测用户是否'穷'。"
+    },
+    "season": {
+      "type": "string",
+      "enum": ["spring", "summer", "autumn", "winter", "unknown"],
+      "description": "当前或计划出行季节"
+    },
+    "weatherContext": {
+      "type": "object",
+      "properties": {
+        "forecast": { "type": "array", "items": { "type": "object" } },
+        "source": { "type": "string" },
+        "fetchedAt": { "type": "string", "format": "date-time" }
+      },
+      "description": "天气上下文（接入天气API后填充）"
+    }
+  },
+  "definitions": {
+    "BudgetElasticity": {
+      "type": "object",
+      "description": "预算弹性三档，总纲5.3。硬预算上限属于过滤条件，舒适区才进入 contextFit。",
+      "properties": {
+        "comfort": {
+          "type": "number",
+          "minimum": 0,
+          "description": "舒适总预算：本次旅行中不需要反复犹豫的总金额"
+        },
+        "hardMax": {
+          "type": "number",
+          "minimum": 0,
+          "description": "可接受上限：为了真正想要的体验愿意扩张到的金额。硬约束过滤条件。"
+        },
+        "saveTarget": {
+          "type": "number",
+          "minimum": 0,
+          "description": "节省目标：用户主动希望系统压缩的金额或比例"
+        }
+      }
+    }
+  }
+}

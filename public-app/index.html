@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="description" content="旅格 Travel Persona — 在现实约束中，帮用户选出更像自己的旅行">
+  <meta name="theme-color" content="#2D6A4F">
+  <title>旅格 Travel Persona</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="styles.css?v=20260713-21">
+</head>
+<body>
+  <header class="app-header" aria-label="旅格主导航">
+    <a class="app-brand" href="#/plan" aria-label="旅格首页">
+      <img class="app-brand__mark" src="assets/icons/compass.svg" alt="">
+      <span class="app-brand__name">旅格</span>
+      <span class="app-brand__en">TRAVEL PERSONA</span>
+    </a>
+    <nav class="desktop-nav" aria-label="主导航">
+      <a href="#/plan" class="nav-item" data-route="plan"><img class="nav-icon" src="assets/icons/map-pinned.svg" alt=""><span>规划</span></a>
+      <a href="#/trips" class="nav-item" data-route="trips"><img class="nav-icon" src="assets/icons/luggage.svg" alt=""><span>行程</span></a>
+      <a href="#/journal" class="nav-item" data-route="journal"><img class="nav-icon" src="assets/icons/book-open.svg" alt=""><span>手账</span></a>
+      <a href="#/profile" class="nav-item" data-route="profile"><img class="nav-icon" src="assets/icons/user-round.svg" alt=""><span>我的旅格</span></a>
+    </nav>
+  </header>
+
+  <!-- ===== App Shell 挂载点（总纲4.1：多路由应用结构） ===== -->
+  <div id="app"></div>
+
+  <!-- ===== 底部导航栏（总纲4.2：移动端底部四项导航） ===== -->
+  <!-- 由 app.js 动态渲染，此处为 SSR 降级占位 -->
+  <nav id="bottom-nav" class="bottom-nav" aria-label="主导航">
+    <a href="#/plan" class="nav-item" data-route="plan">
+      <img class="nav-icon" src="assets/icons/map-pinned.svg" alt="">
+      <span class="nav-label">规划</span>
+    </a>
+    <a href="#/trips" class="nav-item" data-route="trips">
+      <img class="nav-icon" src="assets/icons/luggage.svg" alt="">
+      <span class="nav-label">行程</span>
+    </a>
+    <a href="#/journal" class="nav-item" data-route="journal">
+      <img class="nav-icon" src="assets/icons/book-open.svg" alt="">
+      <span class="nav-label">手账</span>
+    </a>
+    <a href="#/profile" class="nav-item" data-route="profile">
+      <img class="nav-icon" src="assets/icons/user-round.svg" alt="">
+      <span class="nav-label">我的</span>
+    </a>
+  </nav>
+
+  <!-- ===== 核心脚本（纯JS实现，无框架依赖） ===== -->
+  <!-- app.js 定义全局 App 命名空间、路由器和状态管理 -->
+  <script src="tripSync.js?v=20260713-1"></script>
+  <script src="app.js?v=20260713-23"></script>
+  <script src="pathSelection.js?v=20260713-17"></script>
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <!-- plan.js 模块拆分（P1-3 前端性能优化）：先加载子模块，最后加载协调入口 -->
+  <script src="pages/plan-route.js?v=20260713-28"></script>
+  <script src="pages/plan-result.js?v=20260713-28"></script>
+  <script src="pages/plan-form.js?v=20260713-28"></script>
+  <!-- plan.js 协调入口，注册 App.PlanPage 并委托给上述子模块 -->
+  <script src="pages/plan.js?v=20260713-28"></script>
+</body>
+</html>

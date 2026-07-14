@@ -1,0 +1,15 @@
+node_modules
+.trae
+_archive
+.git
+*.bak
+*.zip
+test
+demo
+logs
+.env
+.DS_Store
+*.md
+思维大纲
+比赛信息
+旅格-周工作计划

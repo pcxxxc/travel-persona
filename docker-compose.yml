@@ -1,0 +1,15 @@
+services:
+  travel-persona:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - travel_persona_data:/app/.data
+      - travel_persona_backups:/app/backups
+
+volumes:
+  travel_persona_data:
+  travel_persona_backups:

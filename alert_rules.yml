@@ -1,0 +1,79 @@
+# Prometheus 告警规则模板
+# 旅格 Travel Persona 运维告警
+#
+# 使用方式：
+#   1. 将此文件与 prometheus.yml 放在同一目录
+#   2. 确保 prometheus.yml 中 rule_files 引用了此文件
+#   3. 配置 Alertmanager 接收告警（可选）
+
+groups:
+  - name: travel-persona-health
+    rules:
+      # ---- 服务宕机检测 ----
+      - alert: ServiceDown
+        expr: up{job="travel-persona"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "travel-persona 服务宕机"
+          description: "服务 {{ $labels.instance }} 已停止响应超过 1 分钟"
+
+      # ---- Provider 连续失败 ----
+      - alert: ProviderConsecutiveFailures
+        expr: |
+          (
+            rate(travel_persona_provider_errors_total[5m])
+            /
+            rate(travel_persona_provider_requests_total[5m])
+          ) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Provider 错误率过高"
+          description: "{{ $labels.instance }} Provider 错误率超过 50%，持续 3 分钟"
+
+      # ---- 数据库备份失败 ----
+      - alert: BackupFailed
+        expr: |
+          increase(travel_persona_backup_errors_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "数据库备份失败"
+          description: "最近 1 小时内数据库备份出现失败"
+
+      # ---- 备份过期 ----
+      - alert: BackupStale
+        expr: |
+          time() - travel_persona_backup_last_success_timestamp > 86400
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "数据库备份过期"
+          description: "最近一次成功备份超过 24 小时"
+
+      # ---- 内存使用过高 ----
+      - alert: HighMemoryUsage
+        expr: |
+          process_resident_memory_bytes{job="travel-persona"} / (512 * 1024 * 1024) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "内存使用过高"
+          description: "{{ $labels.instance }} 内存使用超过 512MB 限制的 90%"
+
+      # ---- 请求延迟过高 ----
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="travel-persona"}[5m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "请求延迟过高"
+          description: "{{ $labels.instance }} P95 延迟超过 3 秒，持续 5 分钟"

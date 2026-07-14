@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "travel-persona://schemas/Versioning.json",
+  "title": "Versioning",
+  "description": "版本字段定义 -- 每个推荐结果必须记录完整版本信息以支持重放。总纲9.7数据版本。",
+  "definitions": {
+    "DataVersion": {
+      "type": "object",
+      "required": ["personaModel", "weightVersion", "cityDataSnapshot"],
+      "additionalProperties": false,
+      "properties": {
+        "personaModel": {
+          "type": "string",
+          "description": "人格模型版本，如 '1.0.0'"
+        },
+        "weightVersion": {
+          "type": "string",
+          "description": "推荐权重版本（总纲7.5：权重由当次取向动态调整，但必须记录版本和原因）"
+        },
+        "cityDataSnapshot": {
+          "type": "string",
+          "description": "城市数据快照版本/时间戳"
+        },
+        "mapQueryTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "地图查询时间"
+        },
+        "weatherQueryTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "天气查询时间"
+        },
+        "communitySignalVersion": {
+          "type": "string",
+          "description": "社区信号版本"
+        },
+        "agentModelVersion": {
+          "type": ["string", "null"],
+          "description": "Agent 提示与模型版本（若使用），总纲9.7"
+        },
+        "subDimensionVersion": {
+          "type": "string",
+          "description": "子维度模型版本"
+        },
+        "confidenceModelVersion": {
+          "type": "string",
+          "description": "置信传播模型版本"
+        },
+        "temporalModelVersion": {
+          "type": "string",
+          "description": "时间感知模型版本"
+        },
+        "routeModelVersion": {
+          "type": "string",
+          "description": "通用多城路线模型版本"
+        }
+      }
+    }
+  }
+}

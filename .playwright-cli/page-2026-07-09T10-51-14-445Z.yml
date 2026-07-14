@@ -1,0 +1,209 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - link "回到旅格规划台" [ref=e3] [cursor=pointer]:
+      - /url: "#planner"
+      - generic [ref=e4]: 旅格
+      - generic [ref=e5]: Travel Persona
+    - navigation "页面导航" [ref=e6]:
+      - link "分析" [ref=e7] [cursor=pointer]:
+        - /url: "#planner"
+      - link "推荐" [ref=e8] [cursor=pointer]:
+        - /url: "#results"
+      - link "地图" [ref=e9] [cursor=pointer]:
+        - /url: "#map"
+      - link "API" [ref=e10] [cursor=pointer]:
+        - /url: "#api"
+  - main [ref=e11]:
+    - region "不是再给你一串城市名，而是先判断你现在适合怎样出走。" [ref=e12]:
+      - generic [ref=e14]:
+        - paragraph [ref=e15]: Persona first, map verified
+        - heading "不是再给你一串城市名，而是先判断你现在适合怎样出走。" [level=1] [ref=e16]
+        - paragraph [ref=e17]: 旅格会把情绪、预算、节奏、避雷点和真实目的地属性放在同一个决策模型里，给出能解释、能落地、能接地图的旅行计划。
+        - generic "推荐信号概览" [ref=e18]:
+          - generic [ref=e19]: 人格向量
+          - generic [ref=e20]: 地图 POI
+          - generic [ref=e21]: 避坑过滤
+          - generic [ref=e22]: 行程约束
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - paragraph [ref=e26]: Step 01
+            - heading "旅行人格取样" [level=2] [ref=e27]
+          - button "试一组样例" [active] [ref=e28] [cursor=pointer]
+        - group "你这次旅行最想解决什么？" [ref=e29]:
+          - generic [ref=e30]: 你这次旅行最想解决什么？
+          - generic [ref=e31]:
+            - button "放空恢复" [ref=e32] [cursor=pointer]
+            - button "逃离压力" [ref=e33] [cursor=pointer]
+            - button "灵感采集" [ref=e34] [cursor=pointer]
+            - button "热闹社交" [ref=e35] [cursor=pointer]
+            - button "效率打卡" [ref=e36] [cursor=pointer]
+            - button "试住一城" [ref=e37] [cursor=pointer]
+        - group "你会被哪些场景吸引？" [ref=e38]:
+          - generic [ref=e39]: 你会被哪些场景吸引？
+          - generic [ref=e40]:
+            - generic [ref=e41] [cursor=pointer]:
+              - checkbox "自然山海"
+              - text: 自然山海
+            - generic [ref=e42] [cursor=pointer]:
+              - checkbox "老城街巷" [checked]
+              - text: 老城街巷
+            - generic [ref=e43] [cursor=pointer]:
+              - checkbox "艺术展览" [checked]
+              - text: 艺术展览
+            - generic [ref=e44] [cursor=pointer]:
+              - checkbox "咖啡书店" [checked]
+              - text: 咖啡书店
+            - generic [ref=e45] [cursor=pointer]:
+              - checkbox "夜市美食"
+              - text: 夜市美食
+            - generic [ref=e46] [cursor=pointer]:
+              - checkbox "建筑摄影" [checked]
+              - text: 建筑摄影
+            - generic [ref=e47] [cursor=pointer]:
+              - checkbox "博物馆"
+              - text: 博物馆
+            - generic [ref=e48] [cursor=pointer]:
+              - checkbox "小众探索" [checked]
+              - text: 小众探索
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - text: 计划天数
+              - strong [ref=e52]: 4 天
+            - slider "计划天数 4 天" [ref=e53]: "4"
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - text: 日均预算
+              - strong [ref=e56]: 560 元
+            - slider "日均预算 560 元" [ref=e192]: "560"
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - text: 出发城市
+            - textbox "出发城市" [ref=e60]:
+              - /placeholder: 例如：上海、北京、杭州
+              - text: 上海
+          - generic [ref=e61]:
+            - text: 同行关系
+            - combobox "同行关系" [ref=e62]:
+              - option "一个人" [selected]
+              - option "两个人"
+              - option "朋友局"
+              - option "家庭出行"
+        - group "这次必须避开的体验" [ref=e63]:
+          - generic [ref=e64]: 这次必须避开的体验
+          - generic [ref=e65]:
+            - generic [ref=e66] [cursor=pointer]:
+              - checkbox "人多排队" [checked]
+              - text: 人多排队
+            - generic [ref=e67] [cursor=pointer]:
+              - checkbox "过度商业化" [checked]
+              - text: 过度商业化
+            - generic [ref=e68] [cursor=pointer]:
+              - checkbox "爬山消耗"
+              - text: 爬山消耗
+            - generic [ref=e69] [cursor=pointer]:
+              - checkbox "早起赶路" [checked]
+              - text: 早起赶路
+            - generic [ref=e70] [cursor=pointer]:
+              - checkbox "长交通换乘"
+              - text: 长交通换乘
+            - generic [ref=e71] [cursor=pointer]:
+              - checkbox "溢价消费"
+              - text: 溢价消费
+        - generic [ref=e72]:
+          - text: 再补一句你的真实想法
+          - textbox "再补一句你的真实想法" [ref=e73]:
+            - /placeholder: 例如：最近很累，但又不想完全躺平，希望有一点美术馆、好咖啡和能散步的地方。
+            - text: 最近很累，但希望这趟旅行不是纯躺平。想看一点展、喝好咖啡、拍到有质感的街区，也不想一直排队。
+        - generic [ref=e74]:
+          - button "生成认真版推荐" [ref=e75] [cursor=pointer]
+          - button "重置" [ref=e76] [cursor=pointer]
+    - region "让用户看见自己正在被分析" [ref=e77]:
+      - generic [ref=e78]:
+        - paragraph [ref=e79]: Step 02
+        - heading "让用户看见自己正在被分析" [level=2] [ref=e80]
+        - paragraph [ref=e81]: 推荐不会瞬间跳出答案，而是展示证据、冲突、置信度和权衡，让结果更像一次真实的旅行咨询。
+      - generic [ref=e82]:
+        - article [ref=e83]:
+          - heading "人格向量" [level=3] [ref=e84]
+          - generic [ref=e85]:
+            - generic [ref=e86]:
+              - generic [ref=e87]: 恢复需求
+              - strong [ref=e90]: "50"
+            - generic [ref=e91]:
+              - generic [ref=e92]: 自然偏好
+              - strong [ref=e95]: "50"
+            - generic [ref=e96]:
+              - generic [ref=e97]: 文化深度
+              - strong [ref=e100]: "50"
+            - generic [ref=e101]:
+              - generic [ref=e102]: 烟火美食
+              - strong [ref=e105]: "50"
+            - generic [ref=e106]:
+              - generic [ref=e107]: 行动节奏
+              - strong [ref=e110]: "50"
+            - generic [ref=e111]:
+              - generic [ref=e112]: 社交密度
+              - strong [ref=e115]: "50"
+            - generic [ref=e116]:
+              - generic [ref=e117]: 预算弹性
+              - strong [ref=e120]: "50"
+            - generic [ref=e121]:
+              - generic [ref=e122]: 审美出片
+              - strong [ref=e125]: "50"
+            - generic [ref=e126]:
+              - generic [ref=e127]: 舒适安全
+              - strong [ref=e130]: "50"
+            - generic [ref=e131]:
+              - generic [ref=e132]: 新鲜探索
+              - strong [ref=e135]: "50"
+        - article [ref=e136]:
+          - heading "推理过程" [level=3] [ref=e137]
+          - list [ref=e138]:
+            - listitem [ref=e139]: 读取选择与原话
+            - listitem [ref=e140]: 生成旅行人格向量
+            - listitem [ref=e141]: 叠加预算、天数与避坑约束
+            - listitem [ref=e142]: 匹配地图 POI 与路线密度
+            - listitem [ref=e143]: 输出可解释目的地
+        - article [ref=e144]:
+          - heading "系统判断" [level=3] [ref=e145]
+          - paragraph [ref=e147]: 等待用户输入后，系统会展示人格向量、约束冲突和推荐依据。
+    - region "推荐目的地" [ref=e148]:
+      - generic [ref=e149]:
+        - paragraph [ref=e150]: Step 03
+        - heading "推荐目的地" [level=2] [ref=e151]
+        - paragraph [ref=e152]: 每个推荐都包含匹配分、推荐原因、不推荐原因、避坑提示和地图入口。
+      - paragraph [ref=e155]: 填写上面的取样后，这里会出现你的旅行人格画像。
+    - region "落地行程" [ref=e156]:
+      - generic [ref=e157]:
+        - paragraph [ref=e158]: Step 04
+        - heading "落地行程" [level=2] [ref=e159]
+        - paragraph [ref=e160]: 默认生成 Top 1 城市的可执行路线，也可以在推荐卡片中切换城市。
+      - paragraph [ref=e162]: 生成推荐后会出现按天拆分的路线、预算、预约提醒和雨天备选。
+    - region "百度地图接入位" [ref=e163]:
+      - generic [ref=e164]:
+        - paragraph [ref=e165]: Step 05
+        - heading "百度地图接入位" [level=2] [ref=e166]
+        - paragraph [ref=e167]: 当前版本使用百度地图 URI 免 AK 调起，商业版可在同一接口替换为 JavaScript API GL。
+      - generic [ref=e170]:
+        - strong [ref=e171]: 地图待生成
+        - generic [ref=e172]: 推荐完成后显示城市、POI 和路线入口。
+    - region "智能体与数据接口" [ref=e174]:
+      - generic [ref=e175]:
+        - paragraph [ref=e176]: Production hooks
+        - heading "智能体与数据接口" [level=2] [ref=e177]
+        - paragraph [ref=e178]: 前端已经把智能体、地图、口碑爬取和行程润色拆成接口，后续接真实服务时不用改页面结构。
+      - generic [ref=e179]:
+        - article [ref=e180]:
+          - heading "Agent Planner" [level=3] [ref=e181]
+          - paragraph [ref=e182]: 接入大模型后负责读取人格画像、问答追问、行程润色和实时调整。
+          - code [ref=e183]: POST /api/agent/plan
+        - article [ref=e184]:
+          - heading "Map Provider" [level=3] [ref=e185]
+          - paragraph [ref=e186]: 当前使用百度地图 URI；拿到 AK 后可切换为 JSAPI GL 渲染真实地图。
+          - code [ref=e187]: GET /api/map/pois?city=...
+        - article [ref=e188]:
+          - heading "Community Signals" [level=3] [ref=e189]
+          - paragraph [ref=e190]: 预留小红书/携程/大众点评等口碑信号清洗入口，过滤排队、溢价、闭店和季节性踩雷。
+          - code [ref=e191]: POST /api/research/signals
