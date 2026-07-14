@@ -95,6 +95,20 @@ async function fetchWeatherForCities(cities) {
 }
 
 /**
+ * 根据天气预报生成出行小建议
+ */
+function generateWeatherTip(forecast) {
+  if (!forecast || !forecast.length) return null;
+  const day = forecast[0];
+  const tips = [];
+  if (day.precipitationProbability > 60) tips.push('建议携带雨具');
+  if (day.tempMax > 35) tips.push('注意防暑降温');
+  if (day.tempMin < 5) tips.push('注意保暖');
+  if (day.windSpeed > 30) tips.push('户外活动注意防风');
+  return tips.length ? tips.join('；') : null;
+}
+
+/**
  * 获取行程日期的节假日信息
  */
 function fetchHolidayInfo(tripContext) {
@@ -465,6 +479,7 @@ async function generatePlan(input) {
   decisionPaths.forEach(function (dp) {
     if (dp.type && weatherByPath[dp.type]) {
       dp.weather = weatherByPath[dp.type];
+      if (dp.weather && !dp.weather.weatherTip) dp.weather.weatherTip = generateWeatherTip(dp.weather.forecast);
     }
     if (originCoordinates) {
       dp.originCoordinates = originCoordinates;

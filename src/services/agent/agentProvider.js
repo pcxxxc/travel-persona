@@ -167,7 +167,10 @@ class DeepSeekAgentProvider extends AgentProvider {
     this.name = 'deepseek';
     this.apiKey = options.apiKey || process.env.DEEPSEEK_API_KEY || process.env.GLM_API_KEY;
     this.baseUrl = options.baseUrl || process.env.DEEPSEEK_BASE_URL || process.env.GLM_BASE_URL || 'https://api.deepseek.com/v1';
-    this.model = options.model || process.env.DEEPSEEK_MODEL || process.env.GLM_MODEL || 'deepseek-chat';
+    // DeepSeek V4 双模型：flash 用于常规，pro 用于旅后复盘/复杂多城
+    this.flashModel = options.flashModel || process.env.DEEPSEEK_MODEL_FLASH || process.env.DEEPSEEK_MODEL || process.env.GLM_MODEL || 'deepseek-chat';
+    this.proModel = options.proModel || process.env.DEEPSEEK_MODEL_PRO || 'deepseek-reasoner';
+    this.model = this.flashModel;  // 默认使用 flash
     this.timeout = options.timeout || 30000;
     this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 2;
     this.breaker = options.breaker || getBreaker('deepseek-agent', {
@@ -323,9 +326,15 @@ class DeepSeekAgentProvider extends AgentProvider {
       '返回格式：{ "operations": [ { "op": "replace", "path": "/journalSummary", "value": "..." } ] }'
     ].join('\n');
 
-    const content = await this._callDeepSeek(prompt, { maxTokens: 1024 });
-    const patch = this._normalizePatch(parseJSONContent(content));
-    return this._safeReturn(patch, ALLOWED_PATHS.summarizeJournal, this.dataSource);
+    const savedModel = this.model;
+    this.model = this.proModel;  // 旅后复盘使用 pro 模型
+    try {
+      const content = await this._callDeepSeek(prompt, { maxTokens: 1500 });
+      const patch = this._normalizePatch(parseJSONContent(content));
+      return this._safeReturn(patch, ALLOWED_PATHS.summarizeJournal, this.dataSource);
+    } finally {
+      this.model = savedModel;
+    }
   }
 
   async generateItinerary(params) {
@@ -394,8 +403,14 @@ class DeepSeekAgentProvider extends AgentProvider {
       '请直接输出纯 JSON，不要包裹在 ```json 代码块中。'
     ].join('\n');
 
-    const content = await this._callDeepSeek(prompt, { maxTokens: 4096 });
-    return parseJSONContent(content);
+    const savedModel = this.model;
+    this.model = this.proModel;  // 复杂多城日程使用 pro 模型
+    try {
+      const content = await this._callDeepSeek(prompt, { maxTokens: 4096 });
+      return parseJSONContent(content);
+    } finally {
+      this.model = savedModel;
+    }
   }
 }
 

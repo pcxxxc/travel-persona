@@ -298,5 +298,21 @@ router.post('/itinerary', async (req, res) => {
   }
 });
 
+// GET /api/v1/transport/train-tickets
+router.get('/transport/train-tickets', async (req, res) => {
+  try {
+    const { from, to, date } = req.query;
+    if (!from || !to) return res.status(400).json({ code: 'TP-4001', message: '缺少 from/to 参数' });
+
+    const { Train12306Provider } = require('../../services/transport/train12306Provider');
+    const provider = new Train12306Provider();
+    const result = await provider.queryDirectTickets(from, to, date);
+    res.json(result);
+  } catch (err) {
+    console.error('[transport] 12306查询失败:', err.message);
+    res.json({ available: false, fallback: '本地估算', reason: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.resolveTrustedPersona = resolveTrustedPersona;

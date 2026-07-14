@@ -1,0 +1,1312 @@
+diff --git a/Dockerfile b/Dockerfile
+index 5878aa2..a07e2e5 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -6,9 +6,13 @@ ENV NODE_ENV=production
+ COPY package.json package-lock.json ./
+ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+ 
++COPY mcp-servers/baidu-map/package.json mcp-servers/baidu-map/package-lock.json ./mcp-servers/baidu-map/
++RUN cd mcp-servers/baidu-map && npm ci --omit=dev --ignore-scripts && npm cache clean --force
++
+ COPY --chown=node:node server.js ./
+ COPY --chown=node:node src ./src
+ COPY --chown=node:node public-app ./public-app
++COPY --chown=node:node mcp-servers/baidu-map/src ./mcp-servers/baidu-map/src
+ RUN mkdir -p /app/.data /app/backups && chown -R node:node /app/.data /app/backups
+ 
+ USER node
+diff --git a/deploy/setup-server.sh b/deploy/setup-server.sh
+index 4dbe389..535e76e 100644
+--- a/deploy/setup-server.sh
++++ b/deploy/setup-server.sh
+@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
+ 
+ APP_DIR="/opt/travel-persona"
+ REPO_URL="https://github.com/pcxxxc/travel-persona.git"
+-NODE_VERSION="20"
++NODE_VERSION="24"
+ 
+ echo -e "${GREEN}========================================${NC}"
+ echo -e "${GREEN}  旅格 Travel Persona · 服务器部署${NC}"
+@@ -36,13 +36,17 @@ echo -e "${GREEN}  ✓ 系统依赖安装完成${NC}"
+ # 2. Node.js
+ # ============================================================
+ echo -e "${YELLOW}[2/7] 检查/安装 Node.js ${NODE_VERSION}...${NC}"
+-if ! command -v node &> /dev/null || [[ $(node -v | cut -d. -f1 | tr -d 'v') -lt 18 ]]; then
++if ! command -v node &> /dev/null || ! node -e "const [major, minor] = process.versions.node.split('.').map(Number); process.exit(major > 22 || (major === 22 && minor >= 5) ? 0 : 1)"; then
+     curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - > /dev/null 2>&1
+     apt-get install -y -qq nodejs > /dev/null 2>&1
+     echo -e "${GREEN}  ✓ Node.js $(node -v) 已安装${NC}"
+ else
+     echo -e "${GREEN}  ✓ Node.js $(node -v) 已存在${NC}"
+ fi
++node -e "const [major, minor] = process.versions.node.split('.').map(Number); process.exit(major > 22 || (major === 22 && minor >= 5) ? 0 : 1)" || {
++    echo -e "${RED}  ✗ Node.js must be 22.5 or newer${NC}"
++    exit 1
++}
+ 
+ # ============================================================
+ # 3. PM2
+@@ -75,7 +79,11 @@ echo -e "${GREEN}  ✓ 代码已就绪 ($(git rev-parse --short HEAD))${NC}"
+ # ============================================================
+ echo -e "${YELLOW}[5/7] 安装 Node 依赖...${NC}"
+ cd "$APP_DIR"
+-npm install --production --no-audit --no-fund 2>&1 | tail -3
++npm ci --omit=dev --ignore-scripts --no-audit --no-fund
++(
++    cd "$APP_DIR/mcp-servers/baidu-map"
++    npm ci --omit=dev --ignore-scripts --no-audit --no-fund
++)
+ echo -e "${GREEN}  ✓ 依赖安装完成${NC}"
+ 
+ # ============================================================
+diff --git a/deploy/update-app.sh b/deploy/update-app.sh
+index 0925431..7b4733f 100644
+--- a/deploy/update-app.sh
++++ b/deploy/update-app.sh
+@@ -15,21 +15,45 @@ NC='\033[0m'
+ echo -e "${YELLOW}更新旅格应用...${NC}"
+ cd "$APP_DIR"
+ 
++node -e "const [major, minor] = process.versions.node.split('.').map(Number); process.exit(major > 22 || (major === 22 && minor >= 5) ? 0 : 1)" || {
++    echo "Node.js 22.5 or newer is required. Run deploy/setup-server.sh to install Node 24 first."
++    exit 1
++}
++
+ # 1. 拉取最新代码
+-echo -e "${YELLOW}  [1/3] 拉取最新代码...${NC}"
++echo -e "${YELLOW}  [1/4] 拉取最新代码...${NC}"
+ git pull origin main
+ echo -e "${GREEN}  ✓ 当前版本: $(git rev-parse --short HEAD)${NC}"
+ 
+ # 2. 安装依赖
+-echo -e "${YELLOW}  [2/3] 安装依赖...${NC}"
+-npm install --production --no-audit --no-fund 2>&1 | tail -3
++echo -e "${YELLOW}  [2/4] 安装依赖...${NC}"
++npm ci --omit=dev --ignore-scripts --no-audit --no-fund
++(
++    cd "$APP_DIR/mcp-servers/baidu-map"
++    npm ci --omit=dev --ignore-scripts --no-audit --no-fund
++)
+ echo -e "${GREEN}  ✓ 依赖已更新${NC}"
+ 
+ # 3. 重启应用
+-echo -e "${YELLOW}  [3/3] 重启应用...${NC}"
++echo -e "${YELLOW}  [3/4] 重启应用...${NC}"
+ pm2 reload travel-persona
+ echo -e "${GREEN}  ✓ 应用已重启${NC}"
+ 
++# 4. Fail the deployment loudly instead of leaving Nginx serving a 502.
++echo -e "${YELLOW}  [4/4] 验证应用健康状态...${NC}"
++for attempt in $(seq 1 10); do
++    if curl -fsS http://127.0.0.1:3000/health > /dev/null; then
++        echo -e "${GREEN}  ✓ 健康检查通过${NC}"
++        break
++    fi
++    if [ "$attempt" = "10" ]; then
++        echo "Application did not become healthy after reload."
++        pm2 logs travel-persona --lines 80 --nostream || true
++        exit 1
++    fi
++    sleep 1
++done
++
+ echo ""
+ echo -e "${GREEN}更新完成！${NC}"
+ pm2 status travel-persona
+diff --git a/mcp-servers/baidu-map/src/tools/direction.js b/mcp-servers/baidu-map/src/tools/direction.js
+index 47be76b..e3f2762 100644
+--- a/mcp-servers/baidu-map/src/tools/direction.js
++++ b/mcp-servers/baidu-map/src/tools/direction.js
+@@ -7,6 +7,56 @@
+ import { z } from 'zod';
+ import { callBaiduApi } from '../baiduApiClient.js';
+ 
++function collectTransitVehicles(value, output = []) {
++  if (Array.isArray(value)) {
++    value.forEach(item => collectTransitVehicles(item, output));
++    return output;
++  }
++  if (!value || typeof value !== 'object') return output;
++  if (value.vehicle_info && typeof value.vehicle_info === 'object') {
++    const info = value.vehicle_info;
++    const detail = info.detail && typeof info.detail === 'object' ? info.detail : {};
++    output.push({
++      type: Number(info.type) || 0,
++      name: detail.name || '',
++      price: Number(detail.price) || 0,
++      departureStation: detail.departure_station || detail.start_info?.start_name || '',
++      arrivalStation: detail.arrive_station || detail.end_info?.end_name || '',
++      departureTime: detail.departure_time || detail.start_info?.start_time || '',
++      arrivalTime: detail.arrive_time || detail.end_info?.end_time || ''
++    });
++  }
++  ['steps', 'schemes', 'sub_steps'].forEach(key => {
++    if (value[key]) collectTransitVehicles(value[key], output);
++  });
++  return output;
++}
++
++function formatRoute(route, index, mode) {
++  const vehicles = mode === 'transit' ? collectTransitVehicles(route.steps || []) : [];
++  const intercityVehicles = vehicles.filter(vehicle => [1, 2, 6].includes(vehicle.type));
++  return {
++    route_index: index,
++    distance: Number(route.distance) || 0,
++    duration: Number(route.duration) || 0,
++    arrive_time: route.arrive_time || '',
++    price: Number(route.price) || intercityVehicles.reduce((sum, vehicle) => sum + vehicle.price, 0),
++    transfers: Math.max(0, intercityVehicles.length - 1),
++    vehicles,
++    traffic_condition: route.traffic_condition,
++    toll: route.toll,
++    steps: (route.steps || []).map(step => ({
++      instruction: step.instructions || step.instruction || '',
++      distance: Number(step.distance) || 0,
++      duration: Number(step.duration) || 0,
++      path: step.path,
++      turn: step.turn,
++      road_name: step.road_name,
++      step_distance: step.step_distance
++    }))
++  };
++}
++
+ /**
+  * 注册路线规划相关工具
+  * @param {import('@modelcontextprotocol/sdk').McpServer} server
+@@ -25,10 +75,15 @@ export function registerDirectionTools(server) {
+       waypoints: z.string().optional().describe('途经点，格式 "lat,lng|lat,lng"，仅 driving 模式支持'),
+       region: z.string().optional().describe('城市名称，transit 模式必填，如"北京"'),
+       tactics: z.number().int().optional().describe('路线偏好：0=默认，3=不走高速，4=高速优先，5=躲避拥堵'),
++      tactics_intercity: z.number().int().optional().describe('跨城交通策略'),
++      trans_type_intercity: z.number().int().optional().describe('跨城交通工具类型'),
++      departure_date: z.string().optional().describe('出发日期，YYYY-MM-DD'),
++      departure_time: z.string().optional().describe('出发时间段'),
++      page_size: z.number().int().min(1).max(10).optional().describe('返回方案数量'),
+     },
+-    async ({ origin_lat, origin_lng, dest_lat, dest_lng, mode, waypoints, region, tactics }) => {
+-      const origin = `${origin_lng},${origin_lat}`;
+-      const destination = `${dest_lng},${dest_lat}`;
++    async ({ origin_lat, origin_lng, dest_lat, dest_lng, mode, waypoints, region, tactics, tactics_intercity, trans_type_intercity, departure_date, departure_time, page_size }) => {
++      const origin = `${origin_lat},${origin_lng}`;
++      const destination = `${dest_lat},${dest_lng}`;
+ 
+       let path;
+       const params = {
+@@ -46,8 +101,14 @@ export function registerDirectionTools(server) {
+       } else if (mode === 'transit') {
+         path = '/direction/v2/transit';
+         if (region) params.region = region;
+-        // 市内公交策略：0=快速，1=少换乘，2=少步行，3=不坐地铁
+         if (tactics != null) params.tactics_incity = tactics;
++        if (tactics_intercity != null) params.tactics_intercity = tactics_intercity;
++        if (trans_type_intercity != null) params.trans_type_intercity = trans_type_intercity;
++        if (departure_date) params.departure_date = String(departure_date).replace(/-/g, '');
++        if (departure_time) params.departure_time = departure_time;
++        if (page_size != null) params.page_size = page_size;
++        params.coord_type = 'bd09ll';
++        params.ret_coordtype = 'bd09ll';
+       } else {
+         throw new Error(`不支持的出行方式: ${mode}`);
+       }
+@@ -57,30 +118,7 @@ export function registerDirectionTools(server) {
+       const result = data.result || {};
+       const routes = result.routes || [];
+ 
+-      const formattedRoutes = routes.map((route, idx) => {
+-        const steps = [];
+-        if (route.steps) {
+-          for (const step of route.steps) {
+-            steps.push({
+-              instruction: step.instruction,
+-              distance: step.distance,
+-              duration: step.duration,
+-              path: step.path,
+-              turn: step.turn,
+-              road_name: step.road_name,
+-              step_distance: step.step_distance,
+-            });
+-          }
+-        }
+-        return {
+-          route_index: idx,
+-          distance: route.distance,
+-          duration: route.duration,
+-          traffic_condition: route.traffic_condition,
+-          toll: route.toll,
+-          steps,
+-        };
+-      });
++      const formattedRoutes = routes.map((route, idx) => formatRoute(route, idx, mode));
+ 
+       return {
+         content: [
+@@ -168,6 +206,11 @@ export const directionTools = [
+         waypoints: { type: 'string', description: '途经点，格式 "lat,lng|lat,lng"（仅 driving）' },
+         region: { type: 'string', description: '城市名称（transit 模式必填）' },
+         tactics: { type: 'number', description: '路线偏好' },
++        tactics_intercity: { type: 'number', description: '跨城交通策略' },
++        trans_type_intercity: { type: 'number', description: '跨城交通工具类型' },
++        departure_date: { type: 'string', description: '出发日期，YYYY-MM-DD' },
++        departure_time: { type: 'string', description: '出发时间段' },
++        page_size: { type: 'number', description: '返回方案数量' },
+       },
+       required: ['origin_lat', 'origin_lng', 'dest_lat', 'dest_lng', 'mode'],
+     },
+diff --git a/public-app/index.html b/public-app/index.html
+index 165d6a0..999ab17 100644
+--- a/public-app/index.html
++++ b/public-app/index.html
+@@ -9,8 +9,7 @@
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+-  <link rel="stylesheet" href="styles.css?v=20260715-01">
++  <link rel="stylesheet" href="styles.css?v=20260715-04">
+ </head>
+ <body>
+   <header class="app-header" aria-label="旅格主导航">
+@@ -57,7 +56,7 @@
+   <script defer src="app.js?v=20260715-01"></script>
+   <script defer src="components/personaRadar.js?v=20260714-01"></script>
+   <script defer src="pathSelection.js?v=20260713-17"></script>
+-  <script defer src="vendor/leaflet/leaflet.js"></script>
++  <script defer src="map-client.js?v=20260715-01"></script>
+   <!-- plan.js 模块拆分（P1-3 前端性能优化）：先加载子模块，最后加载协调入口 -->
+   <script defer src="pages/plan-route.js?v=20260715-01"></script>
+     <script defer src="pages/plan-result.js?v=20260715-05"></script>
+diff --git a/public-app/map-client.js b/public-app/map-client.js
+new file mode 100644
+index 0000000..ddfab9d
+--- /dev/null
++++ b/public-app/map-client.js
+@@ -0,0 +1,201 @@
++(function (global) {
++  'use strict';
++
++  var configPromise = null;
++  var sdkPromise = null;
++  var renderId = 0;
++
++  function getConfig() {
++    if (!configPromise) {
++      configPromise = fetch('/api/v1/map/client-config', { credentials: 'same-origin' })
++        .then(function (response) {
++          if (!response.ok) throw new Error('Map client configuration is unavailable');
++          return response.json();
++        });
++    }
++    return configPromise;
++  }
++
++  function loadBaiduWebGl(ak) {
++    if (global.BMapGL) return Promise.resolve(global.BMapGL);
++    if (sdkPromise) return sdkPromise;
++
++    sdkPromise = new Promise(function (resolve, reject) {
++      var script = document.createElement('script');
++      script.async = true;
++      script.src = 'https://api.map.baidu.com/api?v=1.0&type=webgl&ak=' + encodeURIComponent(ak);
++      script.onload = function () {
++        if (global.BMapGL) resolve(global.BMapGL);
++        else reject(new Error('Baidu WebGL SDK did not initialize'));
++      };
++      script.onerror = function () { reject(new Error('Baidu WebGL SDK failed to load')); };
++      document.head.appendChild(script);
++    });
++    return sdkPromise;
++  }
++
++  function transformLat(lng, lat) {
++    var result = -100 + 2 * lng + 3 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng));
++    result += (20 * Math.sin(6 * lng * Math.PI) + 20 * Math.sin(2 * lng * Math.PI)) * 2 / 3;
++    result += (20 * Math.sin(lat * Math.PI) + 40 * Math.sin(lat / 3 * Math.PI)) * 2 / 3;
++    result += (160 * Math.sin(lat / 12 * Math.PI) + 320 * Math.sin(lat * Math.PI / 30)) * 2 / 3;
++    return result;
++  }
++
++  function transformLng(lng, lat) {
++    var result = 300 + lng + 2 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng));
++    result += (20 * Math.sin(6 * lng * Math.PI) + 20 * Math.sin(2 * lng * Math.PI)) * 2 / 3;
++    result += (150 * Math.sin(lng * Math.PI) + 40 * Math.sin(lng / 3 * Math.PI)) * 2 / 3;
++    result += (150 * Math.sin(lng / 12 * Math.PI) + 300 * Math.sin(lng * Math.PI / 30)) * 2 / 3;
++    return result;
++  }
++
++  function wgs84ToBd09(lat, lng) {
++    var x = lng;
++    var y = lat;
++    if (lng >= 72.004 && lng <= 137.8347 && lat >= 0.8293 && lat <= 55.8271) {
++      var dLat = transformLat(lng - 105, lat - 35);
++      var dLng = transformLng(lng - 105, lat - 35);
++      var radLat = lat / 180 * Math.PI;
++      var magic = Math.sin(radLat);
++      magic = 1 - 0.00669342162296594323 * magic * magic;
++      var sqrtMagic = Math.sqrt(magic);
++      dLat = (dLat * 180) / ((6378245 * (1 - 0.00669342162296594323)) / (magic * sqrtMagic) * Math.PI);
++      dLng = (dLng * 180) / (6378245 / sqrtMagic * Math.cos(radLat) * Math.PI);
++      x = lng + dLng;
++      y = lat + dLat;
++    }
++    var z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * Math.PI * 3000 / 180);
++    var theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * Math.PI * 3000 / 180);
++    return { lng: z * Math.cos(theta) + 0.0065, lat: z * Math.sin(theta) + 0.006 };
++  }
++
++  function validPoint(value) {
++    var coordinates = value && (value.coordinates || value);
++    if (!coordinates || !Number.isFinite(Number(coordinates.lat)) || !Number.isFinite(Number(coordinates.lng))) return null;
++    return {
++      name: String(value.name || ''),
++      meta: String(value.meta || ''),
++      coordinates: { lat: Number(coordinates.lat), lng: Number(coordinates.lng) }
++    };
++  }
++
++  function showFallback(container, message) {
++    container.classList.add('plan-map--fallback');
++    container.innerHTML = '';
++    var fallback = document.createElement('div');
++    fallback.className = 'plan-map__fallback plan-map__fallback--domestic';
++    fallback.textContent = message;
++    container.appendChild(fallback);
++  }
++
++  function addSourceLabel(container) {
++    var label = document.createElement('div');
++    label.className = 'map-source-label';
++    label.textContent = '百度地图 · 中国大陆';
++    container.appendChild(label);
++  }
++
++  function drawBaiduMap(container, BMapGL, points, options) {
++    container.classList.remove('plan-map--fallback');
++    container.innerHTML = '';
++    var map = new BMapGL.Map(container, { enableMapClick: false });
++    map.enableScrollWheelZoom(false);
++    if (BMapGL.ZoomControl) map.addControl(new BMapGL.ZoomControl());
++
++    var bdPoints = points.map(function (item) {
++      var bd = wgs84ToBd09(item.coordinates.lat, item.coordinates.lng);
++      return new BMapGL.Point(bd.lng, bd.lat);
++    });
++
++    if (options.origin) {
++      var origin = validPoint(options.origin);
++      if (origin) {
++        var originBd = wgs84ToBd09(origin.coordinates.lat, origin.coordinates.lng);
++        var originPoint = new BMapGL.Point(originBd.lng, originBd.lat);
++        map.addOverlay(new BMapGL.Marker(originPoint));
++        bdPoints.push(originPoint);
++      }
++    }
++
++    points.forEach(function (item, index) {
++      var marker = new BMapGL.Marker(bdPoints[index]);
++      marker.setTitle(item.name);
++      map.addOverlay(marker);
++      if (item.name && BMapGL.Label && BMapGL.Size) {
++        var label = new BMapGL.Label(String(index + 1) + ' ' + item.name, {
++          position: bdPoints[index],
++          offset: new BMapGL.Size(12, -26)
++        });
++        label.setStyle({
++          color: '#173026',
++          backgroundColor: '#ffffff',
++          border: '1px solid #c9ddd2',
++          borderRadius: '3px',
++          padding: '3px 5px',
++          fontSize: '11px',
++          lineHeight: '15px'
++        });
++        map.addOverlay(label);
++      }
++    });
++
++    if (options.drawRoute && bdPoints.length > 1) {
++      map.addOverlay(new BMapGL.Polyline(bdPoints, {
++        strokeColor: '#2d6a4f',
++        strokeWeight: 4,
++        strokeOpacity: 0.78
++      }));
++    }
++
++    if (bdPoints.length > 1) {
++      map.setViewport(bdPoints, { margins: [30, 30, 30, 30] });
++    } else {
++      map.centerAndZoom(bdPoints[0], options.zoom || 11);
++    }
++    addSourceLabel(container);
++  }
++
++  function render(container, values, options) {
++    var points = (values || []).map(validPoint).filter(Boolean);
++    if (!container) return Promise.resolve(false);
++    if (!points.length) {
++      showFallback(container, '这组结果暂时缺少可用坐标。');
++      return Promise.resolve(false);
++    }
++    var currentRender = String(++renderId);
++    container.dataset.travelMapRender = currentRender;
++    return getConfig()
++      .then(function (config) {
++        if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
++        if (config.displayProvider !== 'baidu-webgl' || !config.baiduWebAk) {
++          showFallback(container, '国内地图服务暂未配置，已保留路线顺序。');
++          return false;
++        }
++        return loadBaiduWebGl(config.baiduWebAk)
++          .then(function (BMapGL) {
++            if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
++            drawBaiduMap(container, BMapGL, points, options || {});
++            return true;
++          });
++      })
++      .catch(function () {
++        if (currentRender === container.dataset.travelMapRender && container.isConnected) {
++          showFallback(container, '国内地图服务暂不可用，路线顺序仍已保留。');
++        }
++        return false;
++      });
++  }
++
++  global.TravelMap = {
++    renderPlan: function (container, points, origin, isMultiCity) {
++      return render(container, points, { origin: origin, drawRoute: Boolean(isMultiCity), zoom: 11 });
++    },
++    renderDay: function (container, pois, cityCenter) {
++      var pointValues = (pois || []).map(function (poi) {
++        return { name: poi.name, coordinates: poi.coordinates || { lat: poi.lat, lng: poi.lng } };
++      });
++      return render(container, pointValues, { origin: cityCenter ? { coordinates: cityCenter } : null, drawRoute: false, zoom: 14 });
++    }
++  };
++})(window);
+diff --git a/public-app/pages/plan-result.js b/public-app/pages/plan-result.js
+index 652737a..90ac8e1 100644
+--- a/public-app/pages/plan-result.js
++++ b/public-app/pages/plan-result.js
+@@ -387,6 +387,7 @@
+       : [];
+     var mapIsLive = result.capability?.mapFreshness === 'live';
+     var transitIsLive = result.capability?.transitFreshness === 'live';
++    var mapProvider = result.capability?.mapProvider || '';
+     var note = isRoute
+       ? (transitIsLive ? '城市、关键地点和跨城交通已按出发日期核验；最终车次与价格仍以出票页为准。' : mapIsLive ? '城市与关键地点已由地图服务核验；车次和票价仍需在出发前确认。' : '地图用于判断方向和绕行，具体车次与耗时需在出发前再次校验。')
+       : (mapIsLive ? '目的地坐标已由地图服务核验，距离会继续参与方案比较。' : '距离会参与现实平衡与低成本方案，不再只按城市标签排序。');
+@@ -395,7 +396,7 @@
+         el('div', {}, [
+           el('div', { className: 'map-section__title-row' }, [
+             el('h2', { id: 'plan-map-title', className: 'sampling-title', textContent: isRoute ? '整条路线放在地图上' : '先看这三个选择在哪里' }),
+-            mapIsLive ? el('span', { className: 'tag map-section__verified', textContent: '地图地点已核验' }) : null
++            mapIsLive ? el('span', { className: 'tag map-section__verified', textContent: mapProvider === 'mcp-baidu' ? '百度地图已核验' : '地图地点已核验' }) : null
+           ]),
+           el('p', { className: 'sampling-note', textContent: note })
+         ]),
+@@ -413,14 +414,7 @@
+ 
+   // ========== 瓦片层配置 ==========
+ 
+-  var TILE_SOURCES = [
+-    {
+-      name: 'OpenStreetMap',
+-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+-      subdomains: 'abc',
+-      attribution: '&copy; OpenStreetMap contributors'
+-    }
+-  ];
++  var TILE_SOURCES = [];
+ 
+   function createTileLayer(map, onSourceChange) {
+     var sourceIndex = 0;
+@@ -484,9 +478,12 @@
+ 
+   // ========== 主地图初始化 ==========
+   function initPlanMap(result) {
+-    if (!global.L) return;
+     var mapElement = document.getElementById('plan-map');
+     if (!mapElement) return;
++    if (!global.TravelMap) {
++      mapElement.querySelector('.plan-map__fallback').textContent = '国内地图组件暂未加载。';
++      return;
++    }
+ 
+     if (activePlanMapResizeHandler) {
+       global.removeEventListener('resize', activePlanMapResizeHandler);
+@@ -524,6 +521,19 @@
+       return;
+     }
+ 
++    var mapOrigin = null;
++    if (!isMultiCity && state.plan && state.plan.tripContext && state.plan.tripContext.origin) {
++      var firstDecisionPath = (result.decisionPaths || [])[0];
++      if (firstDecisionPath && firstDecisionPath.originCoordinates) {
++        mapOrigin = {
++          name: state.plan.tripContext.origin,
++          coordinates: firstDecisionPath.originCoordinates
++        };
++      }
++    }
++    global.TravelMap.renderPlan(mapElement, points, mapOrigin, isMultiCity);
++    return;
++
+     mapElement.innerHTML = '';
+     var map = global.L.map(mapElement, {
+       scrollWheelZoom: false,
+@@ -653,9 +663,11 @@
+ 
+   // ========== 每日迷你地图初始化 ==========
+   function initDayMiniMap(containerId, pois, cityCenter) {
+-    if (!global.L) return;
++    if (!global.TravelMap) return;
+     var container = document.getElementById(containerId);
+     if (!container) return;
++    global.TravelMap.renderDay(container, pois, cityCenter);
++    return;
+ 
+     var center = cityCenter && cityCenter.lat != null
+       ? [cityCenter.lat, cityCenter.lng]
+diff --git a/public-app/pages/plan-route.js b/public-app/pages/plan-route.js
+index b9f4304..7626dd3 100644
+--- a/public-app/pages/plan-route.js
++++ b/public-app/pages/plan-route.js
+@@ -157,7 +157,8 @@
+     }
+     result.capability = Object.assign({}, result.capability, {
+       mapFreshness: enrichment.mapFreshness === 'live' ? 'live' : result.capability?.mapFreshness,
+-      transitFreshness: enrichment.transitFreshness
++      transitFreshness: enrichment.transitFreshness,
++      mapProvider: enrichment.mapProvider || result.capability?.mapProvider
+     });
+     result.realTimeData = Object.assign({}, result.realTimeData, {
+       mapEvidence: {
+@@ -165,6 +166,7 @@
+         verifiedPois: enrichment.verifiedPois || 0,
+         verifiedTransitLegs: enrichment.verifiedTransitLegs || 0,
+         transitFreshness: enrichment.transitFreshness,
++        mapProvider: enrichment.mapProvider || '',
+         checkedAt: enrichment.checkedAt
+       }
+     });
+diff --git a/public-app/styles.css b/public-app/styles.css
+index e565ae9..75fd77a 100644
+--- a/public-app/styles.css
++++ b/public-app/styles.css
+@@ -2917,6 +2917,7 @@ html, body {
+ }
+ 
+ .plan-map {
++  position: relative;
+   width: 100%;
+   height: 340px;
+   border: 1px solid var(--color-border);
+@@ -2935,8 +2936,29 @@ html, body {
+   font-size: 13px;
+ }
+ 
+-.plan-map .leaflet-control-attribution {
+-  font-size: 10px;
++.plan-map__fallback--domestic {
++  padding: 24px;
++  text-align: center;
++  line-height: 1.6;
++}
++
++.plan-map.plan-map--fallback {
++  height: 156px;
++}
++
++.map-source-label {
++  position: absolute;
++  right: 8px;
++  bottom: 8px;
++  z-index: 3;
++  padding: 3px 6px;
++  border: 1px solid rgba(23, 48, 38, 0.16);
++  border-radius: 3px;
++  background: rgba(255, 255, 255, 0.9);
++  color: #36584a;
++  font-size: 11px;
++  line-height: 1.2;
++  pointer-events: none;
+ }
+ 
+ .route-map-sequence {
+diff --git a/scripts/production-preflight.js b/scripts/production-preflight.js
+index 06eef5d..58a8fe4 100644
+--- a/scripts/production-preflight.js
++++ b/scripts/production-preflight.js
+@@ -1,5 +1,7 @@
+ 'use strict';
+ 
++require('dotenv').config();
++
+ const fs = require('fs');
+ const path = require('path');
+ 
+@@ -37,13 +39,19 @@ if (!Number.isFinite(telemetryRateLimit) || telemetryRateLimit < 5 || telemetryR
+ }
+ 
+ const mapProvider = String(process.env.MAP_PROVIDER || 'mock').toLowerCase();
+-if (!['mock', 'baidu'].includes(mapProvider)) failures.push('MAP_PROVIDER must be mock or baidu');
++if (!['mock', 'baidu', 'mcp-baidu'].includes(mapProvider)) failures.push('MAP_PROVIDER must be mock, baidu, or mcp-baidu');
+ if (mapProvider === 'baidu' && !process.env.BAIDU_MAP_API_KEY) {
+   failures.push('BAIDU_MAP_API_KEY is required when MAP_PROVIDER=baidu');
+ }
++if (mapProvider === 'mcp-baidu' && !process.env.BAIDU_MAP_AK) {
++  failures.push('BAIDU_MAP_AK is required when MAP_PROVIDER=mcp-baidu');
++}
++if (mapProvider !== 'mock' && !process.env.BAIDU_WEB_AK) {
++  failures.push('BAIDU_WEB_AK is required for the domestic browser map');
++}
+ if (mapProvider === 'mock') warnings.push('Map provider is still in fallback mode');
+-if (launchTier === 'public' && mapProvider !== 'baidu') {
+-  failures.push('MAP_PROVIDER must be baidu when LAUNCH_TIER=public');
++if (launchTier === 'public' && !['baidu', 'mcp-baidu'].includes(mapProvider)) {
++  failures.push('MAP_PROVIDER must be baidu or mcp-baidu when LAUNCH_TIER=public');
+ }
+ if (!process.env.AGENT_PROVIDER) warnings.push('Agent enhancement is disabled; the local planner will remain active');
+ 
+diff --git a/server.js b/server.js
+index ccab12e..9d76b45 100644
+--- a/server.js
++++ b/server.js
+@@ -34,7 +34,7 @@ const contentSafety = require('./src/services/ops/contentSafety');
+ const semanticContentSafety = require('./src/services/ops/semanticContentSafety');
+ const { getAgentProvider, runWithAgent, ALLOWED_PATHS } = require('./src/services/agent/agentProvider');
+ const { applyPatch } = require('./src/services/agent/structuredPatch');
+-const { getActiveProvider } = require('./src/services/map/mapProvider');
++const { getActiveProvider, isBaiduProvider } = require('./src/services/map/mapProvider');
+ 
+ const app = express();
+ const PORT = process.env.PORT || 3000;
+@@ -91,10 +91,10 @@ app.use((req, res, next) => {
+   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+   res.setHeader('Content-Security-Policy', [
+     "default-src 'self'",
+-    "script-src 'self'",
++    "script-src 'self' https://api.map.baidu.com https://mapopen-pub-jsapi.bj.bcebos.com",
+     "style-src 'self' 'unsafe-inline'",
+-    "img-src 'self' data: https://*.tile.openstreetmap.org https://online*.map.bdimg.com https://api*.map.bdimg.com https://shangetu*.map.bdimg.com",
+-    "connect-src 'self'",
++    "img-src 'self' data: https://*.bdimg.com https://*.baidu.com https://*.bcebos.com",
++    "connect-src 'self' https://*.baidu.com https://*.bdimg.com https://*.bcebos.com",
+     "font-src 'self'",
+     "object-src 'none'",
+     "base-uri 'self'",
+@@ -181,7 +181,9 @@ app.get('/health', (req, res) => {
+     identity: getIdentityStatus(),
+     map: {
+       provider: activeMapProvider.name,
+-      freshness: activeMapProvider.name === 'baidu' ? 'live' : 'snapshot'
++      freshness: isBaiduProvider(activeMapProvider) ? 'live' : 'snapshot',
++      browserMap: process.env.BAIDU_WEB_AK ? 'baidu-webgl' : 'route-fallback',
++      mcp: typeof activeMapProvider.getStatus === 'function' ? activeMapProvider.getStatus() : null
+     },
+     contentSafety: semanticContentSafety.getStatus(),
+     llm: {
+diff --git a/src/api/v1/map.js b/src/api/v1/map.js
+index 206fce8..026a62e 100644
+--- a/src/api/v1/map.js
++++ b/src/api/v1/map.js
+@@ -2,7 +2,7 @@
+ 
+ const express = require('express');
+ const router = express.Router();
+-const { getActiveProvider } = require('../../services/map/mapProvider');
++const { getActiveProvider, isBaiduProvider } = require('../../services/map/mapProvider');
+ const { getCityByName } = require('../../data/cityRecords');
+ const contentSafety = require('../../services/ops/contentSafety');
+ const { bd09ToWgs84 } = require('../../services/map/coordinateSystems');
+@@ -53,6 +53,14 @@ function normalizeDepartureDate(value) {
+   return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`)) ? date : '';
+ }
+ 
++function toWgs84(provider, location) {
++  if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return null;
++  if (provider.coordinateSystem === 'wgs84') {
++    return { lat: location.lat, lng: location.lng };
++  }
++  return bd09ToWgs84(location.lng, location.lat);
++}
++
+ async function mapWithConcurrency(values, limit, mapper) {
+   const output = new Array(values.length);
+   let cursor = 0;
+@@ -96,18 +104,19 @@ async function enrichCity(provider, name) {
+     verified: false,
+     source: 'snapshot'
+   };
+-  if (provider.name !== 'baidu') return fallback;
++  if (!isBaiduProvider(provider)) return fallback;
+ 
+   try {
+     const result = await provider.geocode(name);
+     if (!result?.data || !Number.isFinite(result.data.lat) || !Number.isFinite(result.data.lng)) return fallback;
+-    const wgs84 = bd09ToWgs84(result.data.lng, result.data.lat);
++    const wgs84 = toWgs84(provider, result.data);
++    if (!wgs84) return fallback;
+     return {
+       name,
+       coordinates: { lat: wgs84.lat, lng: wgs84.lng },
+       verified: true,
+       source: result.source || 'baidu',
+-      sourceCrs: 'bd09',
++      sourceCrs: provider.coordinateSystem || 'bd09',
+       outputCrs: 'wgs84',
+       fetchedAt: result.fetchedAt
+     };
+@@ -118,7 +127,7 @@ async function enrichCity(provider, name) {
+ }
+ 
+ async function enrichPoi(provider, request) {
+-  if (provider.name !== 'baidu') {
++  if (!isBaiduProvider(provider)) {
+     return { ...request, verified: false, source: 'snapshot' };
+   }
+ 
+@@ -136,9 +145,7 @@ async function enrichPoi(provider, request) {
+       }
+     }
+     const merged = { ...match, ...(detail || {}) };
+-    const wgs84 = Number.isFinite(merged.lat) && Number.isFinite(merged.lng)
+-      ? bd09ToWgs84(merged.lng, merged.lat)
+-      : null;
++    const wgs84 = toWgs84(provider, merged);
+     return {
+       city: request.city,
+       name: request.name,
+@@ -148,7 +155,7 @@ async function enrichPoi(provider, request) {
+       openHours: merged.openHours || '',
+       verified: true,
+       source: search.source || 'baidu',
+-      sourceCrs: 'bd09',
++      sourceCrs: provider.coordinateSystem || 'bd09',
+       outputCrs: 'wgs84',
+       fetchedAt: search.fetchedAt
+     };
+@@ -166,7 +173,7 @@ async function enrichTransitLeg(provider, request, departureDate) {
+     source: 'snapshot',
+     status: departureDate ? 'provider_unavailable' : 'date_required'
+   };
+-  if (provider.name !== 'baidu' || !departureDate) return fallback;
++  if (!isBaiduProvider(provider) || !departureDate) return fallback;
+ 
+   try {
+     const [origin, destination] = await Promise.all([
+@@ -222,6 +229,15 @@ async function enrichTransitLeg(provider, request, departureDate) {
+   }
+ }
+ 
++router.get('/client-config', (req, res) => {
++  const baiduWebAk = String(process.env.BAIDU_WEB_AK || '').trim();
++  res.json({
++    country: 'CN',
++    displayProvider: baiduWebAk ? 'baidu-webgl' : 'route-fallback',
++    baiduWebAk: baiduWebAk || null
++  });
++});
++
+ router.post('/enrich-plan', async (req, res) => {
+   const cities = uniqueStrings(req.body?.cities, MAX_CITIES);
+   const pois = normalizePoiRequests(req.body?.pois);
+@@ -245,7 +261,7 @@ router.post('/enrich-plan', async (req, res) => {
+   const verifiedCities = cityFacts.filter(item => item.verified).length;
+   const verifiedPois = poiFacts.filter(item => item.verified).length;
+   const verifiedTransitLegs = transitFacts.filter(item => item.verified).length;
+-  const mapFreshness = provider.name === 'baidu' && (verifiedCities > 0 || verifiedPois > 0)
++  const mapFreshness = isBaiduProvider(provider) && (verifiedCities > 0 || verifiedPois > 0)
+     ? 'live'
+     : 'snapshot';
+ 
+@@ -255,6 +271,7 @@ router.post('/enrich-plan', async (req, res) => {
+ 
+   res.json(contentSafety.sanitizeOutputValue({
+     mapFreshness,
++    mapProvider: provider.name,
+     cities: cityFacts,
+     pois: poiFacts,
+     transitLegs: transitFacts,
+diff --git a/src/services/map/coordinateSystems.js b/src/services/map/coordinateSystems.js
+index ccb0d5f..4b7e5bd 100644
+--- a/src/services/map/coordinateSystems.js
++++ b/src/services/map/coordinateSystems.js
+@@ -38,6 +38,20 @@ function gcj02ToWgs84(lng, lat) {
+   return { lng: lng * 2 - (lng + dLng), lat: lat * 2 - (lat + dLat) };
+ }
+ 
++function wgs84ToGcj02(lng, lat) {
++  if (outOfChina(lng, lat)) return { lng, lat };
++  const dLat = transformLat(lng - 105, lat - 35);
++  const dLng = transformLng(lng - 105, lat - 35);
++  const radLat = lat / 180 * PI;
++  let magic = Math.sin(radLat);
++  magic = 1 - EE * magic * magic;
++  const sqrtMagic = Math.sqrt(magic);
++  return {
++    lng: lng + dLng * 180 / (A / sqrtMagic * Math.cos(radLat) * PI),
++    lat: lat + dLat * 180 / ((A * (1 - EE)) / (magic * sqrtMagic) * PI)
++  };
++}
++
+ function bd09ToGcj02(lng, lat) {
+   const x = lng - 0.0065;
+   const y = lat - 0.006;
+@@ -46,14 +60,29 @@ function bd09ToGcj02(lng, lat) {
+   return { lng: z * Math.cos(theta), lat: z * Math.sin(theta) };
+ }
+ 
++function gcj02ToBd09(lng, lat) {
++  const z = Math.sqrt(lng * lng + lat * lat) + 0.00002 * Math.sin(lat * X_PI);
++  const theta = Math.atan2(lat, lng) + 0.000003 * Math.cos(lng * X_PI);
++  return { lng: z * Math.cos(theta) + 0.0065, lat: z * Math.sin(theta) + 0.006 };
++}
++
+ function bd09ToWgs84(lng, lat) {
+   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+   const gcj = bd09ToGcj02(lng, lat);
+   return gcj02ToWgs84(gcj.lng, gcj.lat);
+ }
+ 
++function wgs84ToBd09(lat, lng) {
++  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
++  const gcj = wgs84ToGcj02(lng, lat);
++  return gcj02ToBd09(gcj.lng, gcj.lat);
++}
++
+ module.exports = {
+   bd09ToGcj02,
++  gcj02ToBd09,
+   gcj02ToWgs84,
+-  bd09ToWgs84
++  wgs84ToGcj02,
++  bd09ToWgs84,
++  wgs84ToBd09
+ };
+diff --git a/src/services/map/mapProvider.js b/src/services/map/mapProvider.js
+index f28a613..42a44b5 100644
+--- a/src/services/map/mapProvider.js
++++ b/src/services/map/mapProvider.js
+@@ -14,7 +14,6 @@
+  */
+ 
+ const { NetworkError } = require('../../utils/errors');
+-const nominatimProvider = require('./nominatimProvider');
+ const { McpMapProvider } = require('./mcpMapProvider');
+ 
+ // ========== 常量配置 ==========
+@@ -196,6 +195,7 @@ class TtlCache {
+ class MapProvider {
+   constructor(name) {
+     this.name = name;
++    this.coordinateSystem = 'wgs84';
+     this._cache = new TtlCache();
+   }
+ 
+@@ -337,6 +337,8 @@ function parseBaiduTransitRoutes(routes) {
+ class BaiduMapProvider extends MapProvider {
+   constructor() {
+     super('baidu');
++    // Baidu Web Service API returns BD-09 coordinates. Consumers convert once.
++    this.coordinateSystem = 'bd09';
+     this.apiKey = process.env.BAIDU_MAP_API_KEY || '';
+     this.apiBase = BAIDU_API_BASE;
+     if (!this.apiKey) {
+@@ -428,7 +430,7 @@ class BaiduMapProvider extends MapProvider {
+         params.set('trans_type_intercity', String(options.transTypeIntercity ?? 0));
+         params.set('page_size', String(options.pageSize || 3));
+         params.set('page_index', '1');
+-        if (options.departureDate) params.set('departure_date', String(options.departureDate));
++        if (options.departureDate) params.set('departure_date', String(options.departureDate).replace(/-/g, ''));
+         if (options.departureTime) params.set('departure_time', String(options.departureTime));
+       }
+ 
+@@ -488,19 +490,8 @@ class BaiduMapProvider extends MapProvider {
+   }
+ 
+   async geocode(address) {
+-    // 未配置百度 Key 时，降级到 Nominatim（免Key多源策略）
+     if (!this.isConfigured()) {
+-      const results = await nominatimProvider.geocode(address);
+-      if (results.length > 0) {
+-        const r = results[0];
+-        return wrapResult({
+-          lat: r.lat,
+-          lng: r.lng,
+-          sourceName: r.displayName,
+-          precise: true
+-        }, r.source, false);
+-      }
+-      return wrapResult(null, 'none', false);
++      return wrapResult(null, 'baidu:unconfigured', false);
+     }
+ 
+     return this._cachedCall(`geocode:${address}`, async () => {
+@@ -523,19 +514,8 @@ class BaiduMapProvider extends MapProvider {
+   }
+ 
+   async reverseGeocode(lat, lng) {
+-    // 未配置百度 Key 时，降级到 Nominatim
+     if (!this.isConfigured()) {
+-      const result = await nominatimProvider.reverseGeocode(lat, lng);
+-      if (result) {
+-        return wrapResult({
+-          address: result.displayName,
+-          province: '',
+-          city: '',
+-          district: '',
+-          street: ''
+-        }, result.source, false);
+-      }
+-      return wrapResult(null, 'none', false);
++      return wrapResult(null, 'baidu:unconfigured', false);
+     }
+ 
+     return this._cachedCall(`reverse:${lat},${lng}`, async () => {
+@@ -769,6 +749,10 @@ class MockMapProvider extends MapProvider {
+ /** 已实例化的 Provider 单例缓存 */
+ let _activeProvider = null;
+ 
++function isBaiduProvider(provider) {
++  return provider && (provider.name === 'baidu' || provider.name === 'mcp-baidu');
++}
++
+ /**
+  * 根据环境变量获取当前活跃的地图 Provider
+  *
+@@ -823,10 +807,12 @@ module.exports = {
+   // 基类与实现
+   MapProvider,
+   BaiduMapProvider,
++  McpMapProvider,
+   MockMapProvider,
+   // 工厂
+   getActiveProvider,
+   resetProvider,
++  isBaiduProvider,
+   // 工具函数（供 routeSolver 等模块复用）
+   haversineDistance,
+   wrapResult,
+diff --git a/src/services/map/mcpMapProvider.js b/src/services/map/mcpMapProvider.js
+index 4cec47f..81f302a 100644
+--- a/src/services/map/mcpMapProvider.js
++++ b/src/services/map/mcpMapProvider.js
+@@ -8,6 +8,7 @@
+  */
+ 
+ const { spawn } = require('node:child_process');
++const fs = require('node:fs');
+ const path = require('node:path');
+ const { bd09ToWgs84, wgs84ToBd09 } = require('./coordinateSystems');
+ 
+@@ -171,9 +172,12 @@ class McpMapProvider {
+     this._cache = new Map();
+     this.providerName = 'mcp-baidu';
+     this.coverageTier = 'national';
++    // This provider normalizes every MCP response to WGS-84 before returning it.
++    this.coordinateSystem = 'wgs84';
+ 
+     // MCP Server 路径
+     this._serverPath = path.resolve(__dirname, '..', '..', '..', 'mcp-servers', 'baidu-map', 'src', 'index.js');
++    this._runtimePath = path.resolve(__dirname, '..', '..', '..', 'mcp-servers', 'baidu-map', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
+     this._env = {
+       BAIDU_MAP_AK: process.env.BAIDU_MAP_AK || process.env.BAIDU_MAP_API_KEY || '',
+       BAIDU_MAP_SK: process.env.BAIDU_MAP_SK || '',
+@@ -183,7 +187,17 @@ class McpMapProvider {
+   }
+ 
+   isConfigured() {
+-    return Boolean(this._env.BAIDU_MAP_AK);
++    return Boolean(this._env.BAIDU_MAP_AK)
++      && fs.existsSync(this._serverPath)
++      && fs.existsSync(this._runtimePath);
++  }
++
++  getStatus() {
++    return {
++      configured: Boolean(this._env.BAIDU_MAP_AK),
++      serverPresent: fs.existsSync(this._serverPath),
++      dependenciesInstalled: fs.existsSync(this._runtimePath)
++    };
+   }
+ 
+   get name() {
+@@ -212,7 +226,7 @@ class McpMapProvider {
+ 
+       let data = null;
+       if (result && result.lat != null && result.lng != null) {
+-        const wgs = bd09ToWgs84(result.lat, result.lng);
++        const wgs = bd09ToWgs84(result.lng, result.lat);
+         data = {
+           lat: wgs.lat,
+           lng: wgs.lng,
+@@ -276,7 +290,7 @@ class McpMapProvider {
+         let lat = item.location?.lat;
+         let lng = item.location?.lng;
+         if (lat != null && lng != null) {
+-          const wgs = bd09ToWgs84(lat, lng);
++          const wgs = bd09ToWgs84(lng, lat);
+           lat = wgs.lat;
+           lng = wgs.lng;
+         }
+@@ -316,14 +330,29 @@ class McpMapProvider {
+         scope: 2,
+       });
+ 
+-      if (result?.location) {
+-        const wgs = bd09ToWgs84(result.location.lat, result.location.lng);
+-        result.location.lat = wgs.lat;
+-        result.location.lng = wgs.lng;
++      let data = null;
++      if (result) {
++        let lat = result.location?.lat;
++        let lng = result.location?.lng;
++        if (lat != null && lng != null) {
++          const wgs = bd09ToWgs84(lng, lat);
++          lat = wgs.lat;
++          lng = wgs.lng;
++        }
++        data = {
++          id: result.uid || poiId,
++          name: result.name || '',
++          lat,
++          lng,
++          address: result.address || '',
++          telephone: result.telephone || '',
++          openHours: result.detail_info?.open_hours || result.detail_info?.shop_hours || '',
++          type: result.detail_info?.type || ''
++        };
+       }
+ 
+-      if (result) this._cache.set(cacheKey, result);
+-      return wrapResult(result, 'mcp-baidu');
++      if (data) this._cache.set(cacheKey, data);
++      return wrapResult(data, 'mcp-baidu');
+     } catch (error) {
+       return wrapResult(null, 'mcp-baidu:error', error);
+     }
+@@ -334,7 +363,10 @@ class McpMapProvider {
+       return wrapResult(null, 'mcp-baidu:unconfigured', new Error('MCP 百度地图未配置 AK'));
+     }
+ 
+-    const cacheKey = `route:${mode}:${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
++    const routeOptions = mode === 'transit'
++      ? `${options.departureDate || ''}:${options.departureTime || ''}:${options.tacticsIncity ?? 1}:${options.tacticsIntercity ?? 0}:${options.transTypeIntercity ?? 0}`
++      : String(options.tactics ?? '');
++    const cacheKey = `route:${mode}:${origin.lat},${origin.lng}:${destination.lat},${destination.lng}:${routeOptions}`;
+     const cached = this._cache.get(cacheKey);
+     if (cached) return wrapResult(cached, 'mcp-baidu', null, true);
+ 
+@@ -349,15 +381,30 @@ class McpMapProvider {
+         dest_lat: bdDest.lat,
+         dest_lng: bdDest.lng,
+         mode,
+-        region: options.city,
+-        tactics: options.tactics,
++        region: options.region || options.city,
++        tactics: mode === 'transit' ? (options.tacticsIncity ?? 1) : options.tactics,
++        tactics_intercity: options.tacticsIntercity,
++        trans_type_intercity: options.transTypeIntercity,
++        departure_date: options.departureDate,
++        departure_time: options.departureTime,
++        page_size: options.pageSize,
+       });
+ 
+       const data = result ? {
+-        distance: result.total_distance,
+-        duration: result.total_duration,
++        distance: result.total_distance || result.routes?.[0]?.distance || 0,
++        duration: result.total_duration || result.routes?.[0]?.duration || 0,
+         mode: result.mode,
+         routes: result.routes,
++        alternatives: mode === 'transit'
++          ? (result.routes || []).map(route => ({
++            distance: Number(route.distance) || 0,
++            duration: Number(route.duration) || 0,
++            price: Number(route.price) || 0,
++            transfers: Number(route.transfers) || 0,
++            vehicles: Array.isArray(route.vehicles) ? route.vehicles : [],
++            steps: Array.isArray(route.steps) ? route.steps : []
++          }))
++          : []
+       } : null;
+ 
+       if (data) this._cache.set(cacheKey, data);
+diff --git a/test/map-enrichment-test.cjs b/test/map-enrichment-test.cjs
+index 0108089..069916b 100644
+--- a/test/map-enrichment-test.cjs
++++ b/test/map-enrichment-test.cjs
+@@ -3,14 +3,18 @@
+ const assert = require('assert');
+ const express = require('express');
+ const request = require('supertest');
+-const { resetProvider, BaiduMapProvider, parseBaiduTransitRoutes } = require('../src/services/map/mapProvider');
++const { resetProvider, BaiduMapProvider, McpMapProvider, parseBaiduTransitRoutes } = require('../src/services/map/mapProvider');
+ const mapRouter = require('../src/api/v1/map');
+-const { bd09ToWgs84 } = require('../src/services/map/coordinateSystems');
++const { bd09ToWgs84, wgs84ToBd09 } = require('../src/services/map/coordinateSystems');
+ 
+ async function run() {
+   const beijing = bd09ToWgs84(116.410369, 39.921336);
+   assert.ok(beijing.lat > 39.90 && beijing.lat < 39.92, 'BD-09 纬度应转换到 WGS84 北京范围');
+   assert.ok(beijing.lng > 116.39 && beijing.lng < 116.41, 'BD-09 经度应转换到 WGS84 北京范围');
++  const bd09 = wgs84ToBd09(39.9042, 116.4074);
++  const roundTrip = bd09ToWgs84(bd09.lng, bd09.lat);
++  assert.ok(Math.abs(roundTrip.lat - 39.9042) < 0.0001, 'WGS84 纬度应可往返转换');
++  assert.ok(Math.abs(roundTrip.lng - 116.4074) < 0.0001, 'WGS84 经度应可往返转换');
+ 
+   const transitFixture = [{
+     distance: 1318000,
+@@ -51,7 +55,7 @@ async function run() {
+     { departureDate: '2026-08-10', departureTime: '06:00-22:00', tacticsIntercity: 2, transTypeIntercity: 0 }
+   );
+   assert.ok(requestedUrl.includes('/direction/v2/transit?'));
+-  assert.ok(requestedUrl.includes('departure_date=2026-08-10'));
++  assert.ok(requestedUrl.includes('departure_date=20260810'));
+   assert.ok(requestedUrl.includes('tactics_intercity=2'));
+   assert.ok(requestedUrl.includes('trans_type_intercity=0'));
+   assert.strictEqual(liveRoute.data.alternatives[0].vehicles[0].arrivalStation, '南京南站');
+@@ -94,6 +98,73 @@ async function run() {
+     .send({ cities: [], pois: [] })
+     .expect(400);
+ 
++  const originalMcpKey = process.env.BAIDU_MAP_AK;
++  const originalWebKey = process.env.BAIDU_WEB_AK;
++  const originalMcpMethods = {
++    isConfigured: McpMapProvider.prototype.isConfigured,
++    geocode: McpMapProvider.prototype.geocode,
++    searchPOI: McpMapProvider.prototype.searchPOI,
++    getPOIDetail: McpMapProvider.prototype.getPOIDetail,
++    getRoute: McpMapProvider.prototype.getRoute
++  };
++  process.env.MAP_PROVIDER = 'mcp-baidu';
++  process.env.BAIDU_MAP_AK = 'test-mcp-key';
++  process.env.BAIDU_WEB_AK = 'test-browser-key';
++  McpMapProvider.prototype.isConfigured = function () { return true; };
++  McpMapProvider.prototype.geocode = async function (address) {
++    const coordinates = address === '南京' ? { lat: 32.0603, lng: 118.7969 } : { lat: 39.9042, lng: 116.4074 };
++    return { data: coordinates, source: 'mcp-baidu', fetchedAt: '2026-07-15T00:00:00.000Z', cached: false };
++  };
++  McpMapProvider.prototype.searchPOI = async function () {
++    return {
++      data: [{ id: 'poi-1', name: '故宫博物院', lat: 39.9163, lng: 116.3972, address: '北京市东城区景山前街4号' }],
++      source: 'mcp-baidu', fetchedAt: '2026-07-15T00:00:00.000Z', cached: false
++    };
++  };
++  McpMapProvider.prototype.getPOIDetail = async function () {
++    return {
++      data: { id: 'poi-1', name: '故宫博物院', lat: 39.9163, lng: 116.3972, address: '北京市东城区景山前街4号', openHours: '08:30-17:00' },
++      source: 'mcp-baidu', fetchedAt: '2026-07-15T00:00:00.000Z', cached: false
++    };
++  };
++  McpMapProvider.prototype.getRoute = async function () {
++    return {
++      data: { alternatives: [{ duration: 16200, price: 553, transfers: 0, vehicles: [{ type: 1, name: 'G1', departureStation: '北京南站', arrivalStation: '南京南站' }] }] },
++      source: 'mcp-baidu', fetchedAt: '2026-07-15T00:00:00.000Z', cached: false
++    };
++  };
++  resetProvider();
++
++  const clientConfig = await request(app).get('/api/v1/map/client-config').expect(200);
++  assert.strictEqual(clientConfig.body.displayProvider, 'baidu-webgl');
++  assert.strictEqual(clientConfig.body.baiduWebAk, 'test-browser-key');
++
++  const mcpResponse = await request(app)
++    .post('/api/v1/map/enrich-plan')
++    .send({
++      cities: ['北京', '南京'],
++      pois: [{ city: '北京', name: '故宫博物院' }],
++      transitLegs: [{ from: '北京', to: '南京' }],
++      departureDate: '2026-08-10'
++    })
++    .expect(200);
++  assert.strictEqual(mcpResponse.body.mapProvider, 'mcp-baidu');
++  assert.strictEqual(mcpResponse.body.mapFreshness, 'live');
++  assert.strictEqual(mcpResponse.body.transitFreshness, 'live');
++  assert.strictEqual(mcpResponse.body.cities[0].sourceCrs, 'wgs84');
++  assert.strictEqual(mcpResponse.body.cities[0].coordinates.lat, 39.9042, 'MCP WGS84 coordinates must not be converted twice');
++  assert.strictEqual(mcpResponse.body.verifiedTransitLegs, 1);
++
++  McpMapProvider.prototype.isConfigured = originalMcpMethods.isConfigured;
++  McpMapProvider.prototype.geocode = originalMcpMethods.geocode;
++  McpMapProvider.prototype.searchPOI = originalMcpMethods.searchPOI;
++  McpMapProvider.prototype.getPOIDetail = originalMcpMethods.getPOIDetail;
++  McpMapProvider.prototype.getRoute = originalMcpMethods.getRoute;
++  if (originalMcpKey === undefined) delete process.env.BAIDU_MAP_AK;
++  else process.env.BAIDU_MAP_AK = originalMcpKey;
++  if (originalWebKey === undefined) delete process.env.BAIDU_WEB_AK;
++  else process.env.BAIDU_WEB_AK = originalWebKey;
++
+   if (originalProvider === undefined) delete process.env.MAP_PROVIDER;
+   else process.env.MAP_PROVIDER = originalProvider;
+   resetProvider();
+diff --git a/test/production-preflight-test.cjs b/test/production-preflight-test.cjs
+index 73cf894..24979fd 100644
+--- a/test/production-preflight-test.cjs
++++ b/test/production-preflight-test.cjs
+@@ -148,6 +148,7 @@ const validPublic = spawnSync(process.execPath, [script], {
+     ENABLE_LEGACY_API: 'false',
+     MAP_PROVIDER: 'baidu',
+     BAIDU_MAP_API_KEY: 'baidu-map-key-for-production',
++    BAIDU_WEB_AK: 'baidu-browser-key-for-production',
+     CONTENT_SAFETY_MODE: 'provider',
+     CONTENT_SAFETY_PROVIDER_URL: 'https://safety.example.com/check',
+     CONTENT_SAFETY_PROVIDER_KEY: 'content-safety-provider-key-long',
+@@ -158,4 +159,25 @@ const validPublic = spawnSync(process.execPath, [script], {
+ assert.strictEqual(validPublic.status, 0, validPublic.stderr);
+ assert.match(validPublic.stdout, /passed for public launch/);
+ 
++const validMcp = spawnSync(process.execPath, [script], {
++  encoding: 'utf8',
++  env: {
++    ...process.env,
++    SESSION_SECRET: 'session-secret-longer-than-thirty-two-characters',
++    OPS_API_KEY: 'operations-secret-longer-than-thirty-two-characters',
++    ALLOWED_ORIGINS: 'https://travel.example.com',
++    SESSION_COOKIE_SECURE: 'true',
++    LAUNCH_TIER: 'beta',
++    IDENTITY_MODE: 'guest',
++    ENABLE_LEGACY_API: 'false',
++    MAP_PROVIDER: 'mcp-baidu',
++    BAIDU_MAP_AK: 'baidu-mcp-key-for-production',
++    BAIDU_WEB_AK: 'baidu-browser-key-for-production',
++    CONTENT_SAFETY_MODE: 'local',
++    TP_DATABASE_PATH: path.join(os.tmpdir(), 'travel-persona-preflight', 'mcp.sqlite')
++  }
++});
++assert.strictEqual(validMcp.status, 0, validMcp.stderr);
++assert.match(validMcp.stdout, /passed for beta launch/);
++
+ console.log('Production preflight tests passed.');
+diff --git a/test/release-surface-test.cjs b/test/release-surface-test.cjs
+index 55b3e1a..4af63ca 100644
+--- a/test/release-surface-test.cjs
++++ b/test/release-surface-test.cjs
+@@ -14,6 +14,8 @@ assert.ok(!/^COPY\s+(?:--chown=\S+\s+)?\.\s+\.$/m.test(dockerfile), '镜像不
+ assert.match(dockerfile, /COPY --chown=node:node server\.js \./);
+ assert.match(dockerfile, /COPY --chown=node:node src \.\/src/);
+ assert.match(dockerfile, /COPY --chown=node:node public-app \.\/public-app/);
++assert.match(dockerfile, /COPY mcp-servers\/baidu-map\/package\.json mcp-servers\/baidu-map\/package-lock\.json/);
++assert.match(dockerfile, /COPY --chown=node:node mcp-servers\/baidu-map\/src/);
+ assert.ok(dockerfile.includes('/app/backups'), '镜像必须准备独立备份目录');
+ assert.ok(fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8').includes('travel_persona_backups:/app/backups'), 'Compose 必须挂载独立备份卷');
+ 
+@@ -22,9 +24,13 @@ for (const legacyPath of ['public-site', 'travel7.9', 'travel-persona', 'artifac
+ }
+ 
+ assert.ok(!dockerignore.includes('*.html'), '不能排除用户端 index.html');
+-assert.ok(!dockerignore.includes('*.png'), '不能排除 Leaflet 标记图片');
+ assert.ok(fs.existsSync(path.join(root, 'public-app', 'index.html')));
+-assert.ok(fs.existsSync(path.join(root, 'public-app', 'vendor', 'leaflet', 'images', 'marker-icon.png')));
++assert.ok(fs.existsSync(path.join(root, 'public-app', 'map-client.js')));
++const appIndex = fs.readFileSync(path.join(root, 'public-app', 'index.html'), 'utf8');
++const mapClient = fs.readFileSync(path.join(root, 'public-app', 'map-client.js'), 'utf8');
++assert.ok(appIndex.includes('map-client.js'), '用户端必须加载国内地图客户端');
++assert.ok(!appIndex.includes('leaflet'), '用户端不得加载 Leaflet 或外部瓦片依赖');
++assert.ok(!mapClient.includes('openstreetmap.org'), '用户端不得回退到 OpenStreetMap');
+ 
+ const runtimeSources = [
+   path.join(root, 'src', 'data', 'cityRecords.js'),

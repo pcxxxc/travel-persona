@@ -24,11 +24,18 @@
       var script = document.createElement('script');
       script.async = true;
       script.src = 'https://api.map.baidu.com/api?v=1.0&type=webgl&ak=' + encodeURIComponent(ak);
+      var loadTimeout = setTimeout(function () {
+        reject(new Error('Baidu WebGL SDK load timeout (8s)'));
+      }, 8000);
       script.onload = function () {
+        clearTimeout(loadTimeout);
         if (global.BMapGL) resolve(global.BMapGL);
         else reject(new Error('Baidu WebGL SDK did not initialize'));
       };
-      script.onerror = function () { reject(new Error('Baidu WebGL SDK failed to load')); };
+      script.onerror = function () {
+        clearTimeout(loadTimeout);
+        reject(new Error('Baidu WebGL SDK load failed'));
+      };
       document.head.appendChild(script);
     });
     return sdkPromise;

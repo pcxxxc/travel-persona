@@ -129,19 +129,24 @@ class McpClient {
 
   async callTool(name, args) {
     if (!this.initialized) await this.connect();
-    const result = await this._request('tools/call', { name, arguments: args });
-    // 解析返回的 text content 为 JSON
-    if (result.content && result.content.length > 0) {
-      const text = result.content.find(c => c.type === 'text');
-      if (text) {
-        try {
-          return JSON.parse(text.text);
-        } catch (e) {
-          return text.text;
+    await this._rateLimiter.acquire();
+    try {
+      const result = await this._request('tools/call', { name, arguments: args });
+      // 解析返回的 text content 为 JSON
+      if (result.content && result.content.length > 0) {
+        const text = result.content.find(c => c.type === 'text');
+        if (text) {
+          try {
+            return JSON.parse(text.text);
+          } catch (e) {
+            return text.text;
+          }
         }
       }
+      return result;
+    } finally {
+      this._rateLimiter.release();
     }
-    return result;
   }
 
   async listTools() {
@@ -160,6 +165,15 @@ class McpClient {
 }
 
 // ============================================================
+// 并发限流器
+// ============================================================
+class RateLimiter {
+  constructor(maxConcurrent) { this.max = maxConcurrent; this.running = 0; this.queue = []; }
+  async acquire() { if (this.running < this.max) { this.running++; return; } await new Promise(r => this.queue.push(r)); }
+  release() { this.running--; if (this.queue.length) { this.running++; this.queue.shift()(); } }
+}
+
+// ============================================================
 // MCP 百度地图 Provider
 // ============================================================
 
@@ -170,6 +184,7 @@ class McpClient {
 class McpMapProvider {
   constructor() {
     this._cache = new Map();
+    this._rateLimiter = new RateLimiter(2);  // 百度个人认证限流，最多 2 并发
     this.providerName = 'mcp-baidu';
     this.coverageTier = 'national';
     // This provider normalizes every MCP response to WGS-84 before returning it.

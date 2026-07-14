@@ -4240,3 +4240,17 @@ html, body {
     gap: 8px;
   }
 }
+
+/* 手账结构化字段 */
+.journal-composer__field { margin-bottom: 12px; }
+.journal-composer__label { display: block; font-size: 13px; color: #6B7280; margin-bottom: 6px; font-weight: 500; }
+.journal-composer__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.journal-composer__chip { padding: 4px 12px; border-radius: 16px; border: 1px solid #D1D5DB; background: #fff; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.journal-composer__chip--selected { background: #6366F1; color: #fff; border-color: #6366F1; }
+.journal-composer__cost { width: 100%; padding: 8px 12px; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+.journal-composer__radio-group { display: flex; flex-wrap: wrap; gap: 12px; }
+.journal-composer__radio { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; }
+.journal-composer__stars { display: flex; gap: 4px; }
+.journal-composer__star { font-size: 24px; background: none; border: none; cursor: pointer; color: #D1D5DB; transition: color 0.2s; padding: 0; }
+.journal-composer__star--active { color: #F59E0B; }
+.path-card__weather-tip { font-size: 12px; color: #6B7280; margin-top: 4px; padding-left: 4px; }

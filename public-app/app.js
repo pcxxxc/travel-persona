@@ -1927,6 +1927,66 @@
       ])
     ]));
 
+    // ---- 结构化字段（仅关联行程时显示）----
+    if (draft.tripId) {
+      // 今日亮点标签（多选 chip）
+      var tagsField = el('div', { className: 'journal-composer__field' }, [
+        el('label', { className: 'journal-composer__label', textContent: '今日亮点' }),
+        el('div', { className: 'journal-composer__chips' })
+      ]);
+      var tagOptions = ['风景', '美食', '人文', '住宿', '交通', '偶遇'];
+      tagOptions.forEach(function(tag) {
+        var chip = el('button', { type: 'button', className: 'journal-composer__chip', textContent: tag });
+        chip.addEventListener('click', function() {
+          this.classList.toggle('journal-composer__chip--selected');
+        });
+        tagsField.querySelector('.journal-composer__chips').appendChild(chip);
+      });
+
+      // 实际花费（数字输入）
+      var costField = el('div', { className: 'journal-composer__field' }, [
+        el('label', { className: 'journal-composer__label', textContent: '实际花费（选填）' }),
+        el('input', { type: 'number', className: 'journal-composer__cost', placeholder: '今日花费', min: '0' })
+      ]);
+
+      // 与计划的偏差（单选按钮组）
+      var deviationField = el('div', { className: 'journal-composer__field' }, [
+        el('label', { className: 'journal-composer__label', textContent: '与计划的偏差' }),
+        el('div', { className: 'journal-composer__radio-group' })
+      ]);
+      var deviationOptions = ['按计划执行', '临时变更', '意外惊喜', '体验不佳'];
+      deviationOptions.forEach(function(opt, idx) {
+        var radioWrap = el('label', { className: 'journal-composer__radio' }, [
+          el('input', { type: 'radio', name: 'plan-deviation', value: ['on_plan', 'change', 'surprise', 'bad'][idx] }),
+          el('span', { textContent: opt })
+        ]);
+        deviationField.querySelector('.journal-composer__radio-group').appendChild(radioWrap);
+      });
+
+      // 今日心情打分（5星）
+      var moodField = el('div', { className: 'journal-composer__field' }, [
+        el('label', { className: 'journal-composer__label', textContent: '今日心情' }),
+        el('div', { className: 'journal-composer__stars' })
+      ]);
+      for (var s = 1; s <= 5; s++) {
+        (function(score) {
+          var star = el('button', { type: 'button', className: 'journal-composer__star', textContent: '\u2605', 'data-score': score });
+          star.addEventListener('click', function() {
+            moodField.querySelectorAll('.journal-composer__star').forEach(function(s, i) {
+              s.classList.toggle('journal-composer__star--active', i < score);
+            });
+          });
+          moodField.querySelector('.journal-composer__stars').appendChild(star);
+        })(s);
+      }
+
+      // 把这些字段插入到 section 中（文本输入框之前）
+      section.insertBefore(moodField, section.querySelector('.field--wide'));
+      section.insertBefore(deviationField, section.querySelector('.field--wide'));
+      section.insertBefore(costField, section.querySelector('.field--wide'));
+      section.insertBefore(tagsField, section.querySelector('.field--wide'));
+    }
+
     section.appendChild(el('label', { className: 'field field--wide' }, [
       el('span', { className: 'field__label', textContent: fullReview ? '最后，用自己的话留下这趟旅行' : '写下体验、变化或此刻的感受' }),
       el('textarea', {

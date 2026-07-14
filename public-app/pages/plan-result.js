@@ -799,6 +799,16 @@
       ]));
     }
 
+    // 天气小建议
+    if (path.weather && path.weather.weatherTip) {
+      var tipEl = el('div', { className: 'path-card__weather-tip', textContent: path.weather.weatherTip });
+      // 插入到天气元素后面
+      var weatherSection = card.querySelector('.path-card__weather');
+      if (weatherSection && weatherSection.parentNode) {
+        weatherSection.parentNode.insertBefore(tipEl, weatherSection.nextSibling);
+      }
+    }
+
     // 交通成本（优先用后端返回的 transportCost，否则异步查询）
     var originName = state.plan && state.plan.tripContext && state.plan.tripContext.origin ? state.plan.tripContext.origin : '';
     if (originName && originName !== city.name) {
