@@ -579,7 +579,7 @@ async function generatePlan(input) {
     multiCityPlan.primary = (multiCityPlan.variants || []).find(variant => variant.id === multiCityPlan.selectedVariantId) || multiCityPlan.primary;
   }
 
-  const totalBudget = totalComfortBudget || Number(effectiveTripContext.budget?.hardMax) || 0;
+  const totalBudget = Number(effectiveTripContext.budget?.comfort) || Number(effectiveTripContext.budget?.hardMax) || 0;
   const tripDays = Number(effectiveTripContext.days) || 1;
   const dailyBudget = Math.round(totalBudget / tripDays);
   let budgetTier, budgetTierDesc;
