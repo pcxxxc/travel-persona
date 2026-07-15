@@ -1,0 +1,36 @@
+nohup: ignoring input
+◇ injected env (11) from .env // tip: ⌘ override existing { override: true }
+(node:282964) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+旅格 Travel Persona 服务器运行在 http://localhost:3000
+用户端目录: /home/admin/travel-persona/public-app
+版本: 2.1.0
+[mapProvider] 使用 MCP 百度地图 Provider（stdio 模式）
+[2026-07-14T14:32:44.578Z] GET /health - 200 - 8ms
+[2026-07-14T14:41:09.536Z] GET /entries - 200 - 4ms
+[2026-07-14T14:41:09.539Z] GET /persona/proposals - 200 - 2ms
+[2026-07-14T14:41:09.591Z] GET /persona/profile - 200 - 2ms
+[2026-07-14T14:41:09.596Z] GET /persona/timeline - 200 - 3ms
+[2026-07-14T14:41:09.608Z] POST /events - 202 - 11ms
+[2026-07-14T14:41:09.611Z] GET /privacy/settings - 200 - 2ms
+[2026-07-14T14:41:09.612Z] GET /travel-trace - 200 - 1ms
+[2026-07-14T14:41:15.477Z] GET /entries - 200 - 2ms
+[2026-07-14T14:41:15.481Z] GET /persona/timeline - 200 - 2ms
+[2026-07-14T14:41:15.482Z] GET /travel-trace - 200 - 1ms
+[2026-07-14T14:41:15.485Z] GET /persona/profile - 200 - 1ms
+[2026-07-14T14:41:15.486Z] GET /privacy/settings - 200 - 1ms
+[2026-07-14T14:41:15.488Z] GET /persona/proposals - 200 - 1ms
+[2026-07-14T14:41:21.215Z] GET /persona/profile - 200 - 2ms
+[2026-07-14T14:41:21.217Z] GET /entries - 200 - 1ms
+[2026-07-14T14:41:21.218Z] GET /persona/proposals - 200 - 1ms
+[2026-07-14T14:41:21.317Z] GET /privacy/settings - 200 - 1ms
+[2026-07-14T14:41:21.350Z] GET /travel-trace - 200 - 1ms
+[2026-07-14T14:41:21.352Z] GET /persona/timeline - 200 - 1ms
+[2026-07-14T14:41:37.007Z] POST / - 200 - 4090ms
+[2026-07-14T14:41:37.105Z] POST /events - 202 - 2ms
+[2026-07-14T14:41:37.246Z] POST /enrich-plan - 200 - 3ms
+[2026-07-14T14:41:37.308Z] POST /events - 202 - 2ms
+[2026-07-14T14:41:41.165Z] POST /enhance-explanation - 200 - 3711ms
+[2026-07-14T14:41:58.355Z] GET /api/v1/map/pois - 404 - 2ms
+[2026-07-14T14:41:58.408Z] POST /events - 202 - 2ms
+[2026-07-14T14:42:43.343Z] POST /itinerary - 200 - 44927ms
