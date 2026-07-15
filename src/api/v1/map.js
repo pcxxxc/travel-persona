@@ -258,11 +258,14 @@ async function enrichTransitLeg(provider, request, departureDate) {
 router.get('/client-config', (req, res) => {
   // Browser and MCP credentials have different exposure rules. Never surface the server AK.
   const baiduWebAk = String(process.env.BAIDU_WEB_AK || '').trim();
+  const staticAk = String(process.env.BAIDU_STATIC_AK || process.env.BAIDU_WEB_AK || '').trim();
   res.json({
     country: 'CN',
-    displayProvider: baiduWebAk ? 'baidu-webgl' : 'route-fallback',
+    displayProvider: staticAk ? 'baidu-static' : 'route-fallback',
     baiduWebAk: baiduWebAk || null,
-    interactiveMap: process.env.BAIDU_INTERACTIVE_MAP === 'true'
+    staticAk: staticAk || null,
+    interactiveMap: true,
+    leafletTiles: '/api/v1/map/tile/amap'
   });
 });
 

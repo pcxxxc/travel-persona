@@ -11,16 +11,30 @@ class Train12306Provider {
   // 刷新 12306 Cookie
   async _refreshCookie() {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('12306 cookie timeout')), 5000);
-      const req = https.request(`${this.baseUrl}/otn/leftTicket/init`, { method: 'GET', headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      const timer = setTimeout(() => reject(new Error('12306 cookie timeout')), 8000);
+      const req = https.request(`${this.baseUrl}/otn/leftTicket/init`, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+          'Connection': 'keep-alive'
+        }
+      }, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           clearTimeout(timer);
           const setCookie = res.headers['set-cookie'];
           if (setCookie) {
-            this.cookie = setCookie.map(c => c.split(';')[0]).join('; ');
+            const cookies = setCookie.map(c => c.split(';')[0]);
+            // 新版 12306 需要 RAIL_DEVICEID 和 RAIL_EXPIRATION
+            const railDeviceId = cookies.find(c => c.includes('RAIL_DEVICEID'));
+            const railExpiration = cookies.find(c => c.includes('RAIL_EXPIRATION'));
+            this.cookie = cookies.join('; ');
             this.cookieExpiry = Date.now() + 30 * 60 * 1000; // 30分钟有效
+            if (railDeviceId) this.railDeviceId = railDeviceId;
+            if (railExpiration) this.railExpiration = railExpiration;
           }
           resolve();
         });
@@ -132,8 +146,10 @@ class Train12306Provider {
     if (ticket.yz_num && ticket.yz_num !== '无' && ticket.yz_num !== '-') remain['硬座'] = ticket.yz_num;
     if (ticket.yw_num && ticket.yw_num !== '无' && ticket.yw_num !== '-') remain['硬卧'] = ticket.yw_num;
     if (ticket.rw_num && ticket.rw_num !== '无' && ticket.rw_num !== '-') remain['软卧'] = ticket.rw_num;
-    if (ticket.ed_num && ticket.ed_num !== '无' && ticket.ed_num !== '-') remain['二等座'] = ticket.ed_num;
-    if (ticket.yd_num && ticket.yd_num !== '无' && ticket.yd_num !== '-') remain['一等座'] = ticket.yd_num;
+    // 12306 字段名：ze=二等座, zy=一等座, swz=商务座
+    if (ticket.ze_num && ticket.ze_num !== '无' && ticket.ze_num !== '-') remain['二等座'] = ticket.ze_num;
+    if (ticket.zy_num && ticket.zy_num !== '无' && ticket.zy_num !== '-') remain['一等座'] = ticket.zy_num;
+    if (ticket.swz_num && ticket.swz_num !== '无' && ticket.swz_num !== '-') remain['商务座'] = ticket.swz_num;
     return remain;
   }
 }

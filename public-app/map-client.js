@@ -4,7 +4,13 @@
   var configPromise = null;
   var sdkPromise = null;
   var classicSdkPromise = null;
+  var leafletPromise = null;
   var renderId = 0;
+
+  // 手机端检测
+  function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
 
   function getClientConfig() {
     if (!configPromise) {
@@ -101,6 +107,29 @@
       throw error;
     });
     return classicSdkPromise;
+  }
+
+  function loadLeaflet() {
+    if (global.L) return Promise.resolve(global.L);
+    if (leafletPromise) return leafletPromise;
+    leafletPromise = new Promise(function (resolve, reject) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'vendor/leaflet/leaflet.css';
+      document.head.appendChild(link);
+      var script = document.createElement('script');
+      script.src = 'vendor/leaflet/leaflet.js';
+      script.onload = function () {
+        if (global.L) resolve(global.L);
+        else reject(new Error('Leaflet did not initialize'));
+      };
+      script.onerror = function () { reject(new Error('Leaflet script load error')); };
+      document.head.appendChild(script);
+    }).catch(function (e) {
+      leafletPromise = null;
+      throw e;
+    });
+    return leafletPromise;
   }
 
   function transformLat(lng, lat) {
@@ -276,6 +305,50 @@
     addSourceLabel(container);
   }
 
+  function drawLeafletMap(container, points, options) {
+    // 使用 Leaflet 绘制地图（需要 Leaflet 已加载）
+    if (!global.L) {
+      showFallback(container, '地图加载中，路线顺序仍可正常使用。');
+      return;
+    }
+    container.classList.remove('plan-map--fallback');
+    container.innerHTML = '';
+    var map = global.L.map(container, { zoomControl: false, attributionControl: false });
+
+    // 添加瓦片层
+    global.L.tileLayer('/api/v1/map/tile/amap/{z}/{x}/{y}', {
+      maxZoom: 18,
+      crossOrigin: true
+    }).addTo(map);
+
+    var markers = [];
+    points.forEach(function(item, index) {
+      var marker = global.L.marker([item.coordinates.lat, item.coordinates.lng]).addTo(map);
+      marker.bindPopup(String(index + 1) + ' ' + item.name);
+      markers.push([item.coordinates.lat, item.coordinates.lng]);
+    });
+
+    var origin = validPoint(options.origin);
+    if (origin) {
+      global.L.marker([origin.coordinates.lat, origin.coordinates.lng], {
+        icon: global.L.divIcon({ className: 'map-origin-marker', html: '起', iconSize: [24, 24] })
+      }).addTo(map);
+      markers.push([origin.coordinates.lat, origin.coordinates.lng]);
+    }
+
+    if (options.drawRoute && markers.length > 1) {
+      global.L.polyline(markers, { color: '#2d6a4f', weight: 4, opacity: 0.78 }).addTo(map);
+    }
+
+    if (markers.length > 1) {
+      map.fitBounds(markers, { padding: [30, 30] });
+    } else if (markers.length === 1) {
+      map.setView(markers[0], options.zoom || 11);
+    }
+
+    addSourceLabel(container);
+  }
+
   function render(container, values, options) {
     var points = (values || []).map(validPoint).filter(Boolean);
     if (!container) return Promise.resolve(false);
@@ -288,12 +361,29 @@
 
     return getClientConfig().then(function (config) {
       if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
-      if (config.country !== 'CN' || config.displayProvider !== 'baidu-webgl' || !config.baiduWebAk) {
-        showFallback(container, '国内地图暂时不可用，已保留路线顺序与城市间交通核验信息。');
-        return false;
+
+      // 手机端：优先 Leaflet（轻量、兼容性好），再尝试百度 WebGL
+      if (isMobile() && config.leafletTiles) {
+        if (global.L) {
+          drawLeafletMap(container, points, options || {});
+        } else {
+          // 动态加载 Leaflet
+          loadLeaflet().then(function () {
+            if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
+            drawLeafletMap(container, points, options || {});
+          }).catch(function () {
+            showFallback(container, '地图加载中，路线顺序仍可正常使用。');
+          });
+        }
+        return true;
       }
-      drawBaiduStaticMap(container, points, options || {});
-      if (config.interactiveMap) {
+
+      // 桌面端：先静态图，再交互式
+      if (config.staticAk) {
+        drawBaiduStaticMap(container, points, options || {});
+      }
+
+      if (config.interactiveMap && config.baiduWebAk) {
         loadBaiduWebGl(config.baiduWebAk).then(function (BMapGL) {
           if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
           drawBaiduMap(container, BMapGL, points, options || {});
@@ -308,11 +398,10 @@
           return false;
         });
       }
+
       return true;
     }).catch(function () {
-      if (currentRender === container.dataset.travelMapRender && container.isConnected && !container.querySelector('.plan-map__static-image')) {
-        showFallback(container, '地图暂未连通，路线顺序与本地方案不受影响。');
-      }
+      showFallback(container, '地图服务暂时不可用，路线顺序仍可正常使用。');
       return false;
     });
   }

@@ -349,6 +349,7 @@ class DeepSeekAgentProvider extends AgentProvider {
       pois = []
     } = params || {};
 
+    const dailyBudget = Math.floor(budget / Math.max(1, days));
     const prompt = [
       '你是一位资深旅行规划师。请根据以下信息，为用户生成一份详细的城市旅行日程规划。',
       '',
@@ -363,6 +364,13 @@ class DeepSeekAgentProvider extends AgentProvider {
       pois.length > 0
         ? `- 可用 POI 列表（优先从中选择，也可补充你确知存在的同类地点）：\n${JSON.stringify(pois.slice(0, 30), null, 2)}`
         : `- POI 列表：未提供，请根据你对${cityName}的了解，自行推荐真实的景点、餐饮、住宿地点。`,
+      '',
+      '- 预算分层：根据总预算 ' + budget + ' 元和 ' + days + ' 天，按以下标准推荐：',
+      '  * 如果日均预算 < 300 元：推荐青旅/经济型酒店、当地小吃、免费或低价景点',
+      '  * 如果日均预算 300-600 元：推荐三星/舒适型酒店、口碑餐厅、经典景点',
+      '  * 如果日均预算 600-1000 元：推荐特色民宿/精品酒店、特色餐厅、深度体验',
+      '  * 如果日均预算 > 1000 元：推荐四星及以上酒店、高端餐饮、私人定制体验',
+      '- 当前日均预算约 ' + dailyBudget + ' 元，请按对应档次推荐。',
       '',
       '## 输出规则',
       '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
@@ -629,6 +637,7 @@ class GLMAgentProvider extends AgentProvider {
       pois = []
     } = params || {};
 
+    const dailyBudget = Math.floor(budget / Math.max(1, days));
     const prompt = [
       '你是一位资深旅行规划师。请根据以下信息，为用户生成一份详细的城市旅行日程规划。',
       '',
@@ -643,6 +652,13 @@ class GLMAgentProvider extends AgentProvider {
       pois.length > 0
         ? `- 可用 POI 列表（优先从中选择，也可补充你确知存在的同类地点）：\n${JSON.stringify(pois.slice(0, 30), null, 2)}`
         : `- POI 列表：未提供，请根据你对${cityName}的了解，自行推荐真实的景点、餐饮、住宿地点。`,
+      '',
+      '- 预算分层：根据总预算 ' + budget + ' 元和 ' + days + ' 天，按以下标准推荐：',
+      '  * 如果日均预算 < 300 元：推荐青旅/经济型酒店、当地小吃、免费或低价景点',
+      '  * 如果日均预算 300-600 元：推荐三星/舒适型酒店、口碑餐厅、经典景点',
+      '  * 如果日均预算 600-1000 元：推荐特色民宿/精品酒店、特色餐厅、深度体验',
+      '  * 如果日均预算 > 1000 元：推荐四星及以上酒店、高端餐饮、私人定制体验',
+      '- 当前日均预算约 ' + dailyBudget + ' 元，请按对应档次推荐。',
       '',
       '## 输出规则',
       '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
@@ -825,6 +841,18 @@ class MockAgentProvider extends AgentProvider {
     } = params || {};
 
     const dayBudget = Math.floor(budget / Math.max(1, days));
+    let budgetTier = 'budget';
+    if (dayBudget > 1000) budgetTier = 'luxury';
+    else if (dayBudget > 600) budgetTier = 'comfort';
+    else if (dayBudget > 300) budgetTier = 'standard';
+
+    const accommodationByTier = {
+      budget: cityName + '市中心经济型酒店/青旅',
+      standard: cityName + '舒适型酒店/连锁三星',
+      comfort: cityName + '特色民宿/精品酒店',
+      luxury: cityName + '四星及以上酒店/高端度假村'
+    };
+
     const mockDays = [];
     for (let d = 1; d <= days; d++) {
       const schedule = [];
@@ -912,7 +940,7 @@ class MockAgentProvider extends AgentProvider {
         schedule,
         dayBudget,
         dayTransport: d % 2 === 1 ? '地铁' : '公交/步行',
-        accommodation: cityName + (d === 1 ? '市中心经济型酒店' : '特色民宿区'),
+        accommodation: accommodationByTier[budgetTier],
         accommodationBudget: Math.floor(budget * 0.35 / Math.max(1, days))
       });
     }
@@ -920,6 +948,7 @@ class MockAgentProvider extends AgentProvider {
     return {
       days: mockDays,
       totalBudget: budget,
+      budgetTier,
       transportTips: '市内交通以地铁为主，建议购买一日通票；远郊景点可使用网约车或旅游专线。',
       budgetBreakdown: {
         '住宿': Math.floor(budget * 0.35),
