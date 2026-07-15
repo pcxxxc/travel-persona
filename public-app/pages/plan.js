@@ -66,7 +66,7 @@
     // 如果正在加载，显示加载状态
     if (plan.loading) {
       container.innerHTML = '';
-      container.appendChild(renderLoadingState('正在为你生成方案...'));
+      container.appendChild(renderLoadingState('正在为你生成方案，通常需要 10-20 秒...'));
       return;
     }
 

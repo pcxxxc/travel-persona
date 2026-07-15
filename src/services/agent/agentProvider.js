@@ -168,8 +168,8 @@ class DeepSeekAgentProvider extends AgentProvider {
     this.apiKey = options.apiKey || process.env.DEEPSEEK_API_KEY || process.env.GLM_API_KEY;
     this.baseUrl = options.baseUrl || process.env.DEEPSEEK_BASE_URL || process.env.GLM_BASE_URL || 'https://api.deepseek.com/v1';
     // DeepSeek V4 双模型：flash 用于常规，pro 用于旅后复盘/复杂多城
-    this.flashModel = options.flashModel || process.env.DEEPSEEK_MODEL_FLASH || process.env.DEEPSEEK_MODEL || process.env.GLM_MODEL || 'deepseek-chat';
-    this.proModel = options.proModel || process.env.DEEPSEEK_MODEL_PRO || 'deepseek-reasoner';
+    this.flashModel = options.flashModel || process.env.DEEPSEEK_MODEL_FLASH || process.env.DEEPSEEK_MODEL || process.env.GLM_MODEL || 'deepseek-v4-flash';
+    this.proModel = options.proModel || process.env.DEEPSEEK_MODEL_PRO || 'deepseek-v4-pro';
     this.model = this.flashModel;  // 默认使用 flash
     this.timeout = options.timeout || 30000;
     this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 2;
@@ -433,8 +433,10 @@ class DeepSeekAgentProvider extends AgentProvider {
 
     const savedModel = this.model;
     const savedTimeout = this.timeout;
-    this.model = this.proModel;  // 复杂多城日程使用 pro 模型
-    this.timeout = 60000;        // 日程生成允许 60 秒
+    // 单城日程用 flash（够用且快），多城（POI 多或天数多）用 pro
+    var isComplexCity = pois.length > 15 || days > 5;
+    this.model = isComplexCity ? this.proModel : this.flashModel;
+    this.timeout = isComplexCity ? 120000 : 90000;  // pro 120 秒，flash 90 秒
     try {
       const content = await this._callDeepSeek(prompt, { maxTokens: 4096 });
       return parseJSONContent(content);

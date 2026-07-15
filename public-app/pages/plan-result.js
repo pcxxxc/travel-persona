@@ -928,7 +928,12 @@
     var plan = state.plan;
     var tripContext = plan.tripContext || {};
     var tripIntent = plan.tripIntent || {};
-    var loadingTexts = ['旅格正在为您规划行程', '旅格正在为您规划行程.', '旅格正在为您规划行程..', '旅格正在为您规划行程...'];
+    var loadingTexts = [
+      '旅格正在为您规划行程，通常需要 15-30 秒',
+      '旅格正在为您规划行程，通常需要 15-30 秒.',
+      '旅格正在为您规划行程，通常需要 15-30 秒..',
+      '旅格正在为您规划行程，通常需要 15-30 秒...'
+    ];
     var loadingIndex = 0;
 
     var contentArea = el('div', { className: 'itinerary-content' });
