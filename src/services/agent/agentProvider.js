@@ -994,6 +994,8 @@ function parseJSONContent(content) {
   if (typeof content !== 'string') {
     throw new LLMError('Agent 返回非字符串内容', { operation: 'parse_agent_json', content });
   }
+  // 0) 移除 <think >...</think > 标签（V4 Pro reasoning 输出）
+  content = content.replace(/<think[\s\S]*?<\/think>\s*/gi, '').trim();
   // 1) 直接解析
   try {
     return JSON.parse(content);
@@ -1076,7 +1078,7 @@ async function runWithAgent(provider, methodName, args, fallback) {
     return await provider[methodName](...params);
   } catch (err) {
     // Agent 失败：记录并无感降级
-    console.warn(`[Agent] ${methodName} 失败，执行无感降级: ${err.message}`);
+    console.error(`[Agent] ${methodName} 失败: ${err.message}`, err.stack ? '\n' + err.stack.slice(0, 300) : '');
     return typeof fallback === 'function' ? fallback() : fallback;
   }
 }
