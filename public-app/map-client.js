@@ -232,6 +232,17 @@
     if (options.drawRoute && routePoints.length > 1) {
       map.addOverlay(new BMapGL.Polyline(routePoints, { strokeColor: '#2d6a4f', strokeWeight: 4, strokeOpacity: 0.78 }));
     }
+    // 单目的地模式：从出发地到各目的地画放射虚线
+    if (!options.drawRoute && origin && routePoints.length > 0) {
+      var originBd2 = wgs84ToBd09(origin.coordinates.lat, origin.coordinates.lng);
+      var originPt = new BMapGL.Point(originBd2.lng, originBd2.lat);
+      viewportPoints.push(originPt);
+      routePoints.forEach(function (dest) {
+        map.addOverlay(new BMapGL.Polyline([originPt, dest], {
+          strokeColor: '#2d6a4f', strokeWeight: 2, strokeOpacity: 0.55, strokeStyle: 'dashed'
+        }));
+      });
+    }
     if (viewportPoints.length > 1) map.setViewport(viewportPoints, { margins: [30, 30, 30, 30] });
     else map.centerAndZoom(viewportPoints[0], options.zoom || 11);
     addSourceLabel(container);
@@ -274,6 +285,17 @@
 
     if (options.drawRoute && routePoints.length > 1) {
       map.addOverlay(new BMap.Polyline(routePoints, { strokeColor: '#2d6a4f', strokeWeight: 4, strokeOpacity: 0.78 }));
+    }
+    // 单目的地模式：从出发地到各目的地画放射虚线
+    if (!options.drawRoute && origin && routePoints.length > 0) {
+      var originBd2 = wgs84ToBd09(origin.coordinates.lat, origin.coordinates.lng);
+      var originPt = new BMap.Point(originBd2.lng, originBd2.lat);
+      viewportPoints.push(originPt);
+      routePoints.forEach(function (dest) {
+        map.addOverlay(new BMap.Polyline([originPt, dest], {
+          strokeColor: '#2d6a4f', strokeWeight: 2, strokeOpacity: 0.55, strokeStyle: 'dashed'
+        }));
+      });
     }
     if (viewportPoints.length > 1) map.setViewport(viewportPoints, { margins: [30, 30, 30, 30] });
     else map.centerAndZoom(viewportPoints[0], options.zoom || 11);
@@ -338,6 +360,15 @@
 
     if (options.drawRoute && markers.length > 1) {
       global.L.polyline(markers, { color: '#2d6a4f', weight: 4, opacity: 0.78 }).addTo(map);
+    }
+    // 单目的地模式：从出发地到各目的地画放射虚线
+    if (!options.drawRoute && origin && markers.length > 1) {
+      var originLatLng = [origin.coordinates.lat, origin.coordinates.lng];
+      markers.forEach(function (dest) {
+        global.L.polyline([originLatLng, dest], {
+          color: '#2d6a4f', weight: 2, opacity: 0.55, dashArray: '8,8'
+        }).addTo(map);
+      });
     }
 
     if (markers.length > 1) {

@@ -279,6 +279,43 @@ router.post('/itinerary', async (req, res) => {
       });
     }
 
+    // 归一化 LLM 返回的字段名（容错 DeepSeek 不严格遵循 Prompt 格式的情况）
+    itinerary.days.forEach(function (day) {
+      // 容错：如果 LLM 返回 activities 而非 schedule
+      if (!day.schedule && Array.isArray(day.activities)) {
+        day.schedule = day.activities.map(function (act) {
+          return {
+            time: act.time || '',
+            activity: act.title || act.activity || act.name || '',
+            poiName: act.poiName || act.name || '',
+            type: act.type || '',
+            duration: act.duration || null,
+            location: act.locationName || act.location || '',
+            budget: act.budget != null ? act.budget : (act.cost || null),
+            tips: act.tips || '',
+            transportToNext: act.transportToNext || '',
+            highlight: act.highlight || '',
+            lat: act.lat || null,
+            lng: act.lng || null
+          };
+        });
+      }
+      // 对已有 schedule 项也做字段容错
+      if (Array.isArray(day.schedule)) {
+        day.schedule.forEach(function (item) {
+          if (!item.activity && (item.title || item.name)) {
+            item.activity = item.title || item.name;
+          }
+          if (!item.location && item.locationName) {
+            item.location = item.locationName;
+          }
+          if (item.cost != null && item.budget == null) {
+            item.budget = item.cost;
+          }
+        });
+      }
+    });
+
     monitoring.recordMetric('itinerary_generation_time', Date.now() - startedAt, {
       endpoint: '/api/v1/plans/itinerary', status: 'success'
     });

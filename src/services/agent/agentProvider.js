@@ -427,7 +427,8 @@ class DeepSeekAgentProvider extends AgentProvider {
         budgetBreakdown: { '住宿': 400, '餐饮': 300, '门票': 200, '交通': 150 }
       }, null, 2),
       '',
-      '请直接输出纯 JSON，不要包裹在 ```json 代码块中。'
+      '请直接输出纯 JSON，不要包裹在 ```json 代码块中。',
+      '12. 严格按照 schedule（非 activities）作为每日行程数组的 key，每个活动使用 activity（非 title）作为名称字段，budget（非 cost）作为花费字段。'
     ].join('\n');
 
     const savedModel = this.model;
@@ -724,7 +725,8 @@ class GLMAgentProvider extends AgentProvider {
         budgetBreakdown: { '住宿': 400, '餐饮': 300, '门票': 200, '交通': 150 }
       }, null, 2),
       '',
-      '请直接输出纯 JSON，不要包裹在 ```json 代码块中。'
+      '请直接输出纯 JSON，不要包裹在 ```json 代码块中。',
+      '12. 严格按照 schedule（非 activities）作为每日行程数组的 key，每个活动使用 activity（非 title）作为名称字段，budget（非 cost）作为花费字段。'
     ].join('\n');
 
     const savedTimeout = this.timeout;

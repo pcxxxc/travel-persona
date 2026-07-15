@@ -74,6 +74,49 @@ router.post('/cost-estimate', async function (req, res) {
   });
 
   if (matches.length === 0) {
+    // 中转推断：通过枢纽城市做一次中转拼接
+    var hubs = ['北京', '上海', '广州', '武汉', '成都', '西安', '长沙', '南京', '郑州', '重庆'];
+    var bestTransfer = null;
+    for (var i = 0; i < hubs.length; i++) {
+      if (hubs[i] === from || hubs[i] === to) continue;
+      var leg1 = INTERCITY_CONNECTIONS.find(function (c) {
+        return (c.from === from && c.to === hubs[i]) || (c.from === hubs[i] && c.to === from);
+      });
+      var leg2 = INTERCITY_CONNECTIONS.find(function (c) {
+        return (c.from === hubs[i] && c.to === to) || (c.from === to && c.to === hubs[i]);
+      });
+      if (leg1 && leg2) {
+        var totalMin = leg1.durationHours.min + leg2.durationHours.min + 0.5;
+        var totalMax = leg1.durationHours.max + leg2.durationHours.max + 1;
+        var totalFareMin = leg1.fareCny.min + leg2.fareCny.min;
+        var totalFareMax = leg1.fareCny.max + leg2.fareCny.max;
+        if (!bestTransfer || totalMin < bestTransfer.durationHours.min) {
+          bestTransfer = {
+            mode: 'rail',
+            durationHours: { min: Math.round(totalMin * 10) / 10, max: Math.round(totalMax * 10) / 10 },
+            fareCny: { min: totalFareMin, max: totalFareMax },
+            transfers: 1,
+            note: '经' + hubs[i] + '中转，换乘时间未计入，请预留 30-60 分钟',
+            source: 'routeBaseline-transfer',
+            verifiedAt: VERIFIED_AT,
+            requiresLiveCheck: true
+          };
+        }
+      }
+    }
+    if (bestTransfer) {
+      return res.json({
+        ok: true, available: true, from, to,
+        mode: bestTransfer.mode,
+        durationHours: bestTransfer.durationHours,
+        fareCny: bestTransfer.fareCny,
+        transfers: bestTransfer.transfers,
+        note: bestTransfer.note,
+        source: bestTransfer.source,
+        verifiedAt: bestTransfer.verifiedAt,
+        requiresLiveCheck: bestTransfer.requiresLiveCheck
+      });
+    }
     return res.json({
       ok: true,
       available: false,

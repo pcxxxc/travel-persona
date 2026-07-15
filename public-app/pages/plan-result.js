@@ -904,7 +904,12 @@
       textContent: '查看旅格详细日程',
       onClick: function (event) {
         event.stopPropagation();
-        renderItineraryModal(city, path);
+        event.preventDefault();
+        var capturedCity = city;
+        var capturedPath = path;
+        requestAnimationFrame(function () {
+          renderItineraryModal(capturedCity, capturedPath);
+        });
       }
     }));
 
@@ -915,7 +920,11 @@
   // AI 详细日程模态框
   // ============================================================
 
+  var itineraryDialogOpen = false;
+
   function renderItineraryModal(city, path) {
+    if (itineraryDialogOpen) return;
+    itineraryDialogOpen = true;
     var plan = state.plan;
     var tripContext = plan.tripContext || {};
     var tripIntent = plan.tripIntent || {};
@@ -964,6 +973,7 @@
     dialog.addEventListener('close', function () {
       clearInterval(loadingInterval);
       dialog.remove();
+      itineraryDialogOpen = false;
     });
     dialog.showModal();
 
@@ -1120,7 +1130,7 @@
       ]);
 
       var timeline = dayEl.querySelector('.itinerary-timeline');
-      (day.schedule || []).forEach(function (item) {
+      (day.schedule || day.activities || []).forEach(function (item) {
         var typeClass = 'itinerary-tag--' + (item.type === '景点' ? 'sight' : item.type === '餐饮' ? 'food' : item.type === '交通' ? 'transit' : 'rest');
 
         // 格式化时长显示
@@ -1136,7 +1146,7 @@
         }
 
         var titleParts = [
-          el('span', { textContent: item.activity || '' }),
+          el('span', { textContent: item.activity || item.title || item.name || '' }),
           el('span', { className: 'itinerary-tag ' + typeClass, textContent: item.type || '' })
         ];
         if (durationText) {
@@ -1146,8 +1156,8 @@
         var bodyParts = [
           el('div', { className: 'itinerary-item__title' }, titleParts)
         ];
-        if (item.location) {
-          bodyParts.push(el('div', { className: 'itinerary-item__location', textContent: item.location }));
+        if (item.location || item.locationName) {
+          bodyParts.push(el('div', { className: 'itinerary-item__location', textContent: item.location || item.locationName }));
         }
         if (item.poiName) {
           bodyParts.push(el('div', { className: 'itinerary-item__poi', textContent: item.poiName }));
@@ -1155,8 +1165,8 @@
         if (item.highlight) {
           bodyParts.push(el('div', { className: 'itinerary-item__highlight', textContent: item.highlight }));
         }
-        if (item.budget != null) {
-          bodyParts.push(el('div', { className: 'itinerary-item__budget', textContent: '预算 ¥' + item.budget }));
+        if (item.budget != null || item.cost != null) {
+          bodyParts.push(el('div', { className: 'itinerary-item__budget', textContent: '预算 ¥' + (item.budget != null ? item.budget : item.cost) }));
         }
         if (item.tips) {
           bodyParts.push(el('div', { className: 'itinerary-item__tips', textContent: item.tips }));

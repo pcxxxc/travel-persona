@@ -137,7 +137,39 @@ const INTERCITY_CONNECTIONS = [
   connection('武汉', '桂林', 4.5, 6, 280, 450, { frequency: 'medium', confidence: 0.66 }),
   connection('福州', '南昌', 3, 4.5, 180, 320, { frequency: 'medium', confidence: 0.66 }),
   connection('厦门', '南昌', 3.5, 5, 200, 350, { frequency: 'medium', confidence: 0.66 }),
-  connection('杭州', '南昌', 3, 4, 240, 400, { frequency: 'medium', confidence: 0.66 })
+  connection('杭州', '南昌', 3, 4, 240, 400, { frequency: 'medium', confidence: 0.66 }),
+
+  // === 覆盖扩展（2026-07-16 dogfood 修复补全） ===
+  // 西南
+  connection('贵阳', '成都', 3, 4.5, 220, 380, { frequency: 'medium', confidence: 0.64 }),
+  connection('贵阳', '重庆', 2, 3, 150, 280, { frequency: 'medium', confidence: 0.64 }),
+  connection('贵阳', '广州', 5, 7, 350, 580, { frequency: 'medium', confidence: 0.62 }),
+  connection('贵阳', '长沙', 3.5, 5, 200, 380, { frequency: 'medium', confidence: 0.64 }),
+  connection('昆明', '成都', 6, 8, 400, 650, { frequency: 'medium', confidence: 0.60 }),
+  connection('昆明', '贵阳', 4, 5.5, 230, 420, { frequency: 'medium', confidence: 0.62 }),
+  connection('昆明', '广州', 7, 9, 450, 750, { frequency: 'medium', confidence: 0.60 }),
+  connection('南宁', '广州', 3.5, 5, 180, 320, { frequency: 'medium', confidence: 0.64 }),
+  connection('南宁', '桂林', 4, 5.5, 160, 280, { frequency: 'medium', confidence: 0.62 }),
+  connection('南宁', '昆明', 5, 7, 250, 450, { frequency: 'medium', confidence: 0.60 }),
+  // 华中
+  connection('郑州', '北京', 2.5, 3.5, 280, 420, { frequency: 'medium', confidence: 0.66 }),
+  connection('郑州', '武汉', 2, 3, 160, 280, { frequency: 'medium', confidence: 0.66 }),
+  connection('郑州', '西安', 2, 3, 180, 300, { frequency: 'medium', confidence: 0.66 }),
+  connection('郑州', '南京', 3.5, 5, 280, 440, { frequency: 'medium', confidence: 0.66 }),
+  connection('郑州', '济南', 2.5, 3.5, 180, 300, { frequency: 'medium', confidence: 0.66 }),
+  // 华东/华南
+  connection('上海', '南昌', 4, 5.5, 300, 500, { frequency: 'medium', confidence: 0.66 }),
+  connection('上海', '福州', 5, 6.5, 320, 520, { frequency: 'medium', confidence: 0.64 }),
+  connection('上海', '青岛', 4.5, 6, 380, 580, { frequency: 'medium', confidence: 0.66 }),
+  connection('合肥', '南京', 1, 1.5, 60, 120, { frequency: 'medium', confidence: 0.66 }),
+  connection('合肥', '武汉', 2.5, 3.5, 160, 280, { frequency: 'medium', confidence: 0.66 }),
+  connection('合肥', '上海', 2, 3, 120, 220, { frequency: 'medium', confidence: 0.66 }),
+  // 华北
+  connection('石家庄', '北京', 1.5, 2.5, 80, 160, { frequency: 'medium', confidence: 0.66 }),
+  connection('石家庄', '太原', 3, 4.5, 140, 260, { frequency: 'medium', confidence: 0.64 }),
+  connection('呼和浩特', '北京', 3, 4.5, 150, 280, { frequency: 'medium', confidence: 0.62 }),
+  // 西北/高原
+  connection('拉萨', '西宁', 12, 18, 400, 700, { frequency: 'low', confidence: 0.50, note: '超长距离，建议对比航空方案。' })
 ];
 
 module.exports = { INTERCITY_CONNECTIONS, VERIFIED_AT };
