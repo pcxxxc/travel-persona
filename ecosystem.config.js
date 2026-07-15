@@ -1,15 +1,15 @@
 /**
  * PM2 配置文件
  *
- * 生产环境使用 cluster 模式，2 实例负载均衡。
- * 开发环境使用 fork 模式，单实例便于调试。
+ * 使用 fork 模式单实例运行，避免 SQLite 并发写入锁库。
+ * SQLite 不支持多进程并发写，cluster 模式会导致 database locked 错误。
  */
 module.exports = {
   apps: [{
     name: 'travel-persona',
     script: './server.js',
-    instances: 2,
-    exec_mode: 'cluster',
+    exec_mode: 'fork',
+    instances: 1,
     env: {
       NODE_ENV: 'development',
       PORT: 3000
