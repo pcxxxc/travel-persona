@@ -183,14 +183,14 @@ class DeepSeekAgentProvider extends AgentProvider {
     }
   }
 
-  async _callDeepSeek(prompt, { maxTokens = 1024 } = {}) {
+  async _callDeepSeek(prompt, { maxTokens = 1024, timeoutMs = this.timeout, maxRetries = this.maxRetries, jsonObject = false } = {}) {
     return this.breaker.execute(async () => {
-      const attempts = this.maxRetries + 1;
+      const attempts = maxRetries + 1;
       let lastErr = null;
 
       for (let attempt = 0; attempt < attempts; attempt++) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), this.timeout);
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
           const resp = await fetch(`${this.baseUrl}/chat/completions`, {
             method: 'POST',
@@ -202,7 +202,8 @@ class DeepSeekAgentProvider extends AgentProvider {
               model: this.model,
               messages: [{ role: 'user', content: prompt }],
               max_tokens: maxTokens,
-              temperature: 0.3
+              temperature: 0.3,
+              ...(jsonObject ? { response_format: { type: 'json_object' } } : {})
             }),
             signal: controller.signal
           });
@@ -218,12 +219,24 @@ class DeepSeekAgentProvider extends AgentProvider {
 
           const data = await resp.json();
           const content = data.choices?.[0]?.message?.content || '';
+          if (!content || content.trim().length === 0) {
+            throw new LLMError('DeepSeek 返回空内容', {
+              operation: 'call_deepseek',
+              finishReason: data.choices?.[0]?.finish_reason
+            });
+          }
+          if (data.choices?.[0]?.finish_reason === 'length') {
+            throw new LLMError('DeepSeek 日程输出达到长度上限', {
+              operation: 'call_deepseek',
+              finishReason: 'length'
+            });
+          }
           return content;
         } catch (err) {
           if (err.name === 'AbortError') {
-            lastErr = new LLMError(`DeepSeek 调用超时（${this.timeout}ms）`, {
+            lastErr = new LLMError(`DeepSeek 调用超时（${timeoutMs}ms）`, {
               operation: 'call_deepseek',
-              timeout: this.timeout
+              timeout: timeoutMs
             });
           } else if (err instanceof LLMError) {
             lastErr = err;
@@ -376,7 +389,7 @@ class DeepSeekAgentProvider extends AgentProvider {
       '',
       '## 输出规则',
       '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
-      '2. 每天安排 2-4 个活动，时间合理，避免过度紧凑。',
+      '2. 每天安排 2-3 个活动，时间合理，避免过度紧凑；每个文本字段保持简洁。',
       '3. POI 名称应使用该地点的正式/常用名称，确保真实存在。',
       '4. 预算分配要现实，包含餐饮、门票、交通、住宿等。',
       '5. 根据兴趣和回避调整推荐内容。',
@@ -433,12 +446,17 @@ class DeepSeekAgentProvider extends AgentProvider {
 
     const savedModel = this.model;
     const savedTimeout = this.timeout;
-    // 单城日程用 flash（够用且快），多城（POI 多或天数多）用 pro
+    // A detailed itinerary is optional enhancement. Keep a strict time budget so the local fallback stays responsive.
     var isComplexCity = pois.length > 15 || days > 5;
     this.model = isComplexCity ? this.proModel : this.flashModel;
-    this.timeout = isComplexCity ? 120000 : 90000;  // pro 120 秒，flash 90 秒
+    this.timeout = isComplexCity ? 120000 : 90000;  // pro 120s, flash 90s
     try {
-      const content = await this._callDeepSeek(prompt, { maxTokens: 4096 });
+      const content = await this._callDeepSeek(prompt, {
+        maxTokens: 16384,  // V4 支持大输出，不限制日程长度
+        timeoutMs: this.timeout,
+        maxRetries: 1,
+        jsonObject: true
+      });
       return parseJSONContent(content);
     } finally {
       this.model = savedModel;
@@ -1016,6 +1034,29 @@ function parseJSONContent(content) {
   if (brace) {
     try {
       return JSON.parse(brace[0]);
+    } catch (_) {
+      // 继续尝试修复截断
+    }
+  }
+  // 4) 修复截断的 JSON：找到最后一个完整的 } 并补全缺失的括号
+  const lastBrace = content.lastIndexOf('}');
+  const lastBracket = content.lastIndexOf(']');
+  const truncateTo = Math.max(lastBrace, lastBracket);
+  if (truncateTo > 0) {
+    let truncated = content.slice(0, truncateTo + 1);
+    // 统计未闭合的 { 和 [
+    let openBraces = 0, openBrackets = 0;
+    for (let i = 0; i < truncated.length; i++) {
+      if (truncated[i] === '{') openBraces++;
+      else if (truncated[i] === '}') openBraces--;
+      else if (truncated[i] === '[') openBrackets++;
+      else if (truncated[i] === ']') openBrackets--;
+    }
+    // 补全缺失的闭合括号
+    while (openBrackets > 0) { truncated += ']'; openBrackets--; }
+    while (openBraces > 0) { truncated += '}'; openBraces--; }
+    try {
+      return JSON.parse(truncated);
     } catch (_) {
       // 继续抛错
     }
