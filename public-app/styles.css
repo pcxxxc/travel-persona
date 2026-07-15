@@ -4248,6 +4248,69 @@ html, body {
   }
 }
 
+/* 详细日程增强样式 */
+.itinerary-item__duration {
+  display: inline-block;
+  padding: 1px 8px;
+  font-size: 12px;
+  color: #6B7280;
+  background: #F3F4F6;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+.itinerary-item__location {
+  font-size: 13px;
+  color: #9CA3AF;
+  margin-top: 2px;
+}
+
+.itinerary-item__highlight {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #D97706;
+  background: #FEF3C7;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.itinerary-transport-connector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 4px 36px;
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.itinerary-transport-connector::before {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 1px;
+  background: #D1D5DB;
+}
+
+.itinerary-day__accommodation {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #F0FDF4;
+  border-left: 3px solid #22C55E;
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+}
+
+.itinerary-day__accommodation-label {
+  font-weight: 600;
+  color: #166534;
+}
+
+.itinerary-day__accommodation-budget {
+  color: #15803D;
+  font-weight: 500;
+}
+
 /* 手账结构化字段 */
 .journal-composer__field { margin-bottom: 12px; }
 .journal-composer__label { display: block; font-size: 13px; color: #6B7280; margin-bottom: 6px; font-weight: 500; }

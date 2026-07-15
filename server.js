@@ -431,7 +431,7 @@ app.post('/api/local/plan', (req, res, next) => {
 });
 
 // GET /api/map/pois —— 地图 POI 数据层，后续可替换为百度地图 Place API
-app.get('/api/map/pois', (req, res) => {
+app.get(['/api/map/pois', '/api/v1/map/pois'], (req, res) => {
   const city = fallbackPlanner.getCityByName(req.query.city);
 
   if (!city) {

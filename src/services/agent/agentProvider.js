@@ -360,17 +360,21 @@ class DeepSeekAgentProvider extends AgentProvider {
       `- 回避：${avoid.join('、') || '无'}`,
       `- 旅行动机：${mood}`,
       `- 同行：${companion}`,
-      `- 可用 POI 列表（必须从中选择，不要虚构未列出的地点）：`,
-      JSON.stringify(pois.slice(0, 30), null, 2),
+      pois.length > 0
+        ? `- 可用 POI 列表（优先从中选择，也可补充你确知存在的同类地点）：\n${JSON.stringify(pois.slice(0, 30), null, 2)}`
+        : `- POI 列表：未提供，请根据你对${cityName}的了解，自行推荐真实的景点、餐饮、住宿地点。`,
       '',
       '## 输出规则',
       '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
       '2. 每天安排 2-4 个活动，时间合理，避免过度紧凑。',
-      '3. POI 名称必须匹配上方提供的列表中的 name 字段。',
+      '3. POI 名称应使用该地点的正式/常用名称，确保真实存在。',
       '4. 预算分配要现实，包含餐饮、门票、交通、住宿等。',
       '5. 根据兴趣和回避调整推荐内容。',
       '6. 每个活动包含实用建议（tips）。',
       '7. 类型只能是：景点、餐饮、交通、休息 四种之一。',
+      '8. 每个活动必须包含 duration（分钟）、location（具体地址）、transportToNext（到下一站怎么走+多久）、highlight（一个亮点/看点）。',
+      '9. 每天必须包含 accommodation（推荐住宿区域）和 accommodationBudget（当日住宿预算）。',
+      '10. transportToNext 描述从当前活动地点到下一个活动地点的交通方式和预计时间。',
       '',
       '## 输出格式',
       JSON.stringify({
@@ -385,14 +389,20 @@ class DeepSeekAgentProvider extends AgentProvider {
                 activity: '活动名称',
                 poiName: 'POI名称（必须匹配pois列表）',
                 type: '景点/餐饮/交通/休息',
+                duration: 150,
+                location: '具体地址描述',
                 budget: 120,
                 tips: '实用建议',
+                transportToNext: '步行15分钟',
+                highlight: '亮点描述',
                 lat: 39.9,
                 lng: 116.4
               }
             ],
             dayBudget: 350,
-            dayTransport: '地铁/公交/步行'
+            dayTransport: '地铁/公交/步行',
+            accommodation: '推荐住宿区域，如鼓楼区附近经济型酒店',
+            accommodationBudget: 200
           }
         ],
         totalBudget: 1050,
@@ -404,12 +414,15 @@ class DeepSeekAgentProvider extends AgentProvider {
     ].join('\n');
 
     const savedModel = this.model;
+    const savedTimeout = this.timeout;
     this.model = this.proModel;  // 复杂多城日程使用 pro 模型
+    this.timeout = 60000;        // 日程生成允许 60 秒
     try {
       const content = await this._callDeepSeek(prompt, { maxTokens: 4096 });
       return parseJSONContent(content);
     } finally {
       this.model = savedModel;
+      this.timeout = savedTimeout;
     }
   }
 }
@@ -627,17 +640,21 @@ class GLMAgentProvider extends AgentProvider {
       `- 回避：${avoid.join('、') || '无'}`,
       `- 旅行动机：${mood}`,
       `- 同行：${companion}`,
-      `- 可用 POI 列表（必须从中选择，不要虚构未列出的地点）：`,
-      JSON.stringify(pois.slice(0, 30), null, 2),
+      pois.length > 0
+        ? `- 可用 POI 列表（优先从中选择，也可补充你确知存在的同类地点）：\n${JSON.stringify(pois.slice(0, 30), null, 2)}`
+        : `- POI 列表：未提供，请根据你对${cityName}的了解，自行推荐真实的景点、餐饮、住宿地点。`,
       '',
       '## 输出规则',
       '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
       '2. 每天安排 2-4 个活动，时间合理，避免过度紧凑。',
-      '3. POI 名称必须匹配上方提供的列表中的 name 字段。',
+      '3. POI 名称应使用该地点的正式/常用名称，确保真实存在。',
       '4. 预算分配要现实，包含餐饮、门票、交通、住宿等。',
       '5. 根据兴趣和回避调整推荐内容。',
       '6. 每个活动包含实用建议（tips）。',
       '7. 类型只能是：景点、餐饮、交通、休息 四种之一。',
+      '8. 每个活动必须包含 duration（分钟）、location（具体地址）、transportToNext（到下一站怎么走+多久）、highlight（一个亮点/看点）。',
+      '9. 每天必须包含 accommodation（推荐住宿区域）和 accommodationBudget（当日住宿预算）。',
+      '10. transportToNext 描述从当前活动地点到下一个活动地点的交通方式和预计时间。',
       '',
       '## 输出格式',
       JSON.stringify({
@@ -652,14 +669,20 @@ class GLMAgentProvider extends AgentProvider {
                 activity: '活动名称',
                 poiName: 'POI名称（必须匹配pois列表）',
                 type: '景点/餐饮/交通/休息',
+                duration: 150,
+                location: '具体地址描述',
                 budget: 120,
                 tips: '实用建议',
+                transportToNext: '步行15分钟',
+                highlight: '亮点描述',
                 lat: 39.9,
                 lng: 116.4
               }
             ],
             dayBudget: 350,
-            dayTransport: '地铁/公交/步行'
+            dayTransport: '地铁/公交/步行',
+            accommodation: '推荐住宿区域，如鼓楼区附近经济型酒店',
+            accommodationBudget: 200
           }
         ],
         totalBudget: 1050,
@@ -670,8 +693,14 @@ class GLMAgentProvider extends AgentProvider {
       '请直接输出纯 JSON，不要包裹在 ```json 代码块中。'
     ].join('\n');
 
-    const content = await this._callGLM(prompt, { maxTokens: 4096 });
-    return parseJSONContent(content);
+    const savedTimeout = this.timeout;
+    this.timeout = 60000;        // 日程生成允许 60 秒
+    try {
+      const content = await this._callGLM(prompt, { maxTokens: 4096 });
+      return parseJSONContent(content);
+    } finally {
+      this.timeout = savedTimeout;
+    }
   }
 }
 
@@ -807,8 +836,12 @@ class MockAgentProvider extends AgentProvider {
         activity: `游览 ${morningPoi.name}`,
         poiName: morningPoi.name,
         type: '景点',
+        duration: 150,
+        location: cityName + '市中心核心区域',
         budget: Math.floor(dayBudget * 0.25),
         tips: '建议早到避开人流，带好防晒用品。',
+        transportToNext: '步行10分钟',
+        highlight: morningPoi.name + '最具代表性的核心景观',
         lat: morningPoi.lat || 39.9,
         lng: morningPoi.lng || 116.4
       });
@@ -817,8 +850,12 @@ class MockAgentProvider extends AgentProvider {
         activity: '当地特色午餐',
         poiName: afternoonPoi.name,
         type: '餐饮',
+        duration: 90,
+        location: afternoonPoi.name + '附近美食街',
         budget: Math.floor(dayBudget * 0.2),
         tips: '尝试本地招牌菜，避开景区主街溢价餐厅。',
+        transportToNext: '步行5分钟',
+        highlight: '当地最正宗的风味小吃',
         lat: afternoonPoi.lat || 39.85,
         lng: afternoonPoi.lng || 116.35
       });
@@ -828,8 +865,12 @@ class MockAgentProvider extends AgentProvider {
           activity: `探索 ${afternoonPoi.name}`,
           poiName: afternoonPoi.name,
           type: '景点',
+          duration: 180,
+          location: cityName + '文化街区',
           budget: Math.floor(dayBudget * 0.2),
           tips: '下午光线适合拍照，注意保管随身物品。',
+          transportToNext: '地铁2号线15分钟',
+          highlight: '感受当地历史与人文气息',
           lat: afternoonPoi.lat || 39.85,
           lng: afternoonPoi.lng || 116.35
         });
@@ -839,8 +880,12 @@ class MockAgentProvider extends AgentProvider {
           activity: '自由活动 / 咖啡馆休息',
           poiName: '休息',
           type: '休息',
+          duration: 120,
+          location: cityName + '文艺街区咖啡馆',
           budget: Math.floor(dayBudget * 0.1),
           tips: '选一家有露台的咖啡馆，观察当地生活节奏。',
+          transportToNext: '步行10分钟',
+          highlight: '体验当地人的慢生活',
           lat: morningPoi.lat || 39.9,
           lng: morningPoi.lng || 116.4
         });
@@ -850,8 +895,12 @@ class MockAgentProvider extends AgentProvider {
         activity: '晚餐与夜景',
         poiName: afternoonPoi.name,
         type: '餐饮',
+        duration: 120,
+        location: afternoonPoi.name + '夜景观景区附近',
         budget: Math.floor(dayBudget * 0.25),
         tips: '晚餐后可在附近散步，感受城市夜晚氛围。',
+        transportToNext: null,
+        highlight: '城市夜景与美食的双重享受',
         lat: afternoonPoi.lat || 39.85,
         lng: afternoonPoi.lng || 116.35
       });
@@ -862,7 +911,9 @@ class MockAgentProvider extends AgentProvider {
         theme: d === 1 ? '初识' + cityName : (d === days ? '告别与返程' : '深度探索'),
         schedule,
         dayBudget,
-        dayTransport: d % 2 === 1 ? '地铁' : '公交/步行'
+        dayTransport: d % 2 === 1 ? '地铁' : '公交/步行',
+        accommodation: cityName + (d === 1 ? '市中心经济型酒店' : '特色民宿区'),
+        accommodationBudget: Math.floor(budget * 0.35 / Math.max(1, days))
       });
     }
 
