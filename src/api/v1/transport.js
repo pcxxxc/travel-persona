@@ -31,9 +31,7 @@ router.post('/cost-estimate', async function (req, res) {
         // 提取最低/最高票价与最短/最长时长
         const tickets = liveResult.tickets;
         const prices = tickets
-          .map(t => Object.values(t.prices || {}).filter(p => typeof p === 'number'))
-          .flat()
-          .filter(p => p > 0);
+          .flatMap(t => Object.values(t.prices || {}).filter(p => typeof p === 'number' && p > 0));
         const durations = tickets
           .map(t => {
             if (!t.duration) return null;

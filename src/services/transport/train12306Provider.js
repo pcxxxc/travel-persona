@@ -125,17 +125,35 @@ class Train12306Provider {
   _parsePrices(ypInfo) {
     if (!ypInfo) return {};
     const prices = {};
-    const types = [
-      { key: 'wz', label: '无座' },
-      { key: 'yz', label: '硬座' },
-      { key: 'yw', label: '硬卧' },
-      { key: 'rw', label: '软卧' },
-      { key: 'yd', label: '一等座' },
-      { key: 'ed', label: '二等座' },
-      { key: 'swz', label: '商务座' }
-    ];
     // yp_info 格式: price_type1:price1_price_type2:price2_...
-    // 简化处理：直接返回原始字符串
+    // 12306 票价类型编码: A9=商务座, M=一等座, O=二等座, 1=硬座, 3=硬卧上, 4=软卧上, WZ=无座
+    const typeMap = {
+      'A9': '商务座', 'swz': '商务座',
+      'M': '一等座', 'zy': '一等座', 'yd': '一等座',
+      'O': '二等座', 'ze': '二等座', 'ed': '二等座',
+      '1': '硬座', 'yz': '硬座',
+      '3': '硬卧', 'yw': '硬卧',
+      '4': '软卧', 'rw': '软卧',
+      'WZ': '无座', 'wz': '无座'
+    };
+    try {
+      const segments = ypInfo.split('_');
+      for (const seg of segments) {
+        const colonIdx = seg.indexOf(':');
+        if (colonIdx === -1) continue;
+        const typeCode = seg.substring(0, colonIdx);
+        const priceStr = seg.substring(colonIdx + 1);
+        const price = parseFloat(priceStr);
+        if (!isNaN(price) && price > 0) {
+          const label = typeMap[typeCode] || typeCode;
+          if (!prices[label] || price < prices[label]) {
+            prices[label] = price;
+          }
+        }
+      }
+    } catch (e) {
+      // 解析失败，返回空对象
+    }
     prices.raw = ypInfo;
     return prices;
   }

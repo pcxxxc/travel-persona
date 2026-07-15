@@ -835,12 +835,15 @@
         if (t.source === 'baidu-map' && t.distanceKm && t.durationHours) {
           textEl.textContent = t.distanceKm + 'km · 驾车约' + t.durationHours + '小时';
           textEl.style.color = '';
-        } else if (t.source === 'static-baseline' && t.fareCny && t.durationHours) {
-          var durMin = t.durationHours.min || t.durationHours;
-          var durMax = t.durationHours.max || t.durationHours;
+        } else if (t.fareCny && t.durationHours) {
+          var durMin = t.durationHours.min != null ? t.durationHours.min : t.durationHours;
+          var durMax = t.durationHours.max != null ? t.durationHours.max : durMin;
           var durText = (durMin === durMax ? durMin + '小时' : durMin + '-' + durMax + '小时');
-          var fareText = '¥' + t.fareCny.min + '-' + t.fareCny.max;
-          textEl.textContent = fareText + ' · ' + (t.mode === 'rail' ? '铁路' : t.mode || '交通') + ' ' + durText;
+          var fareText = (t.fareCny.min != null && t.fareCny.max != null)
+            ? '¥' + t.fareCny.min + '-' + t.fareCny.max
+            : '¥' + t.fareCny;
+          var modeText = t.mode === 'rail' ? '铁路' : (t.mode || '交通');
+          textEl.textContent = fareText + ' · ' + modeText + ' ' + durText;
           textEl.style.color = '';
           // 叠加交通费用到总预算显示
           var costValueEl = card.querySelector('.path-card__cost-value');

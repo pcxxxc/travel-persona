@@ -579,6 +579,16 @@ async function generatePlan(input) {
     multiCityPlan.primary = (multiCityPlan.variants || []).find(variant => variant.id === multiCityPlan.selectedVariantId) || multiCityPlan.primary;
   }
 
+  const totalBudget = totalComfortBudget || Number(effectiveTripContext.budget?.hardMax) || 0;
+  const tripDays = Number(effectiveTripContext.days) || 1;
+  const dailyBudget = Math.round(totalBudget / tripDays);
+  let budgetTier, budgetTierDesc;
+  if (dailyBudget < 200) { budgetTier = 'budget'; budgetTierDesc = '经济型'; }
+  else if (dailyBudget < 400) { budgetTier = 'standard'; budgetTierDesc = '标准型'; }
+  else if (dailyBudget < 700) { budgetTier = 'comfort'; budgetTierDesc = '舒适型'; }
+  else if (dailyBudget < 1200) { budgetTier = 'premium'; budgetTierDesc = '品质型'; }
+  else { budgetTier = 'luxury'; budgetTierDesc = '奢华型'; }
+
   return {
     planId: `plan-${Date.now()}`,
     personaSnapshot: {
@@ -615,7 +625,8 @@ async function generatePlan(input) {
     rankingStability: {
       volatility: uncertaintyRanking.rankChanges?.[0] || null,
       topStability: uncertaintyRanking.stabilityScores || {}
-    }
+    },
+    budgetTier: { tier: budgetTier, label: budgetTierDesc, dailyBudget }
   };
 }
 

@@ -349,13 +349,22 @@ class DeepSeekAgentProvider extends AgentProvider {
       pois = []
     } = params || {};
 
-    const dailyBudget = Math.floor(budget / Math.max(1, days));
+    const dailyBudget = Math.round(budget / Math.max(1, days));
+    let budgetTier, budgetTierDesc;
+    if (dailyBudget < 200) { budgetTier = 'budget'; budgetTierDesc = '经济型'; }
+    else if (dailyBudget < 400) { budgetTier = 'standard'; budgetTierDesc = '标准型'; }
+    else if (dailyBudget < 700) { budgetTier = 'comfort'; budgetTierDesc = '舒适型'; }
+    else if (dailyBudget < 1200) { budgetTier = 'premium'; budgetTierDesc = '品质型'; }
+    else { budgetTier = 'luxury'; budgetTierDesc = '奢华型'; }
+
     const prompt = [
       '你是一位资深旅行规划师。请根据以下信息，为用户生成一份详细的城市旅行日程规划。',
       '',
       '## 输入信息',
       `- 城市：${cityName}`,
       `- 天数：${days} 天`,
+      `- 日均预算：约 ¥${dailyBudget} 元`,
+      `- 预算档位：${budgetTier}（${budgetTierDesc}）`,
       `- 总预算：约 ${budget} 元`,
       `- 兴趣：${interests.join('、') || '无特定偏好'}`,
       `- 回避：${avoid.join('、') || '无'}`,
@@ -364,13 +373,6 @@ class DeepSeekAgentProvider extends AgentProvider {
       pois.length > 0
         ? `- 可用 POI 列表（优先从中选择，也可补充你确知存在的同类地点）：\n${JSON.stringify(pois.slice(0, 30), null, 2)}`
         : `- POI 列表：未提供，请根据你对${cityName}的了解，自行推荐真实的景点、餐饮、住宿地点。`,
-      '',
-      '- 预算分层：根据总预算 ' + budget + ' 元和 ' + days + ' 天，按以下标准推荐：',
-      '  * 如果日均预算 < 300 元：推荐青旅/经济型酒店、当地小吃、免费或低价景点',
-      '  * 如果日均预算 300-600 元：推荐三星/舒适型酒店、口碑餐厅、经典景点',
-      '  * 如果日均预算 600-1000 元：推荐特色民宿/精品酒店、特色餐厅、深度体验',
-      '  * 如果日均预算 > 1000 元：推荐四星及以上酒店、高端餐饮、私人定制体验',
-      '- 当前日均预算约 ' + dailyBudget + ' 元，请按对应档次推荐。',
       '',
       '## 输出规则',
       '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
@@ -383,6 +385,13 @@ class DeepSeekAgentProvider extends AgentProvider {
       '8. 每个活动必须包含 duration（分钟）、location（具体地址）、transportToNext（到下一站怎么走+多久）、highlight（一个亮点/看点）。',
       '9. 每天必须包含 accommodation（推荐住宿区域）和 accommodationBudget（当日住宿预算）。',
       '10. transportToNext 描述从当前活动地点到下一个活动地点的交通方式和预计时间。',
+      `11. 预算适配：根据预算档位 ${budgetTier}（${budgetTierDesc}），推荐相应档次的住宿、餐饮和活动：
+   - 经济型（<¥200/天）：青年旅舍/经济型酒店、小吃/快餐/路边摊、免费景点+公园+步行
+   - 标准型（¥200-400/天）：连锁快捷酒店、大众餐馆/特色小吃、主要景点门票
+   - 舒适型（¥400-700/天）：三星或精品酒店、当地口碑餐厅/特色菜、景点+体验活动
+   - 品质型（¥700-1200/天）：四星或设计酒店、知名餐厅/预约私房菜、深度文化体验/小团
+   - 奢华型（>¥1200/天）：五星或度假酒店、米其林/黑珍珠餐厅、私人定制/直升机等高端体验
+   每个活动的 budget 字段应反映实际档次。`,
       '',
       '## 输出格式',
       JSON.stringify({
@@ -637,13 +646,22 @@ class GLMAgentProvider extends AgentProvider {
       pois = []
     } = params || {};
 
-    const dailyBudget = Math.floor(budget / Math.max(1, days));
+    const dailyBudget = Math.round(budget / Math.max(1, days));
+    let budgetTier, budgetTierDesc;
+    if (dailyBudget < 200) { budgetTier = 'budget'; budgetTierDesc = '经济型'; }
+    else if (dailyBudget < 400) { budgetTier = 'standard'; budgetTierDesc = '标准型'; }
+    else if (dailyBudget < 700) { budgetTier = 'comfort'; budgetTierDesc = '舒适型'; }
+    else if (dailyBudget < 1200) { budgetTier = 'premium'; budgetTierDesc = '品质型'; }
+    else { budgetTier = 'luxury'; budgetTierDesc = '奢华型'; }
+
     const prompt = [
       '你是一位资深旅行规划师。请根据以下信息，为用户生成一份详细的城市旅行日程规划。',
       '',
       '## 输入信息',
       `- 城市：${cityName}`,
       `- 天数：${days} 天`,
+      `- 日均预算：约 ¥${dailyBudget} 元`,
+      `- 预算档位：${budgetTier}（${budgetTierDesc}）`,
       `- 总预算：约 ${budget} 元`,
       `- 兴趣：${interests.join('、') || '无特定偏好'}`,
       `- 回避：${avoid.join('、') || '无'}`,
@@ -652,13 +670,6 @@ class GLMAgentProvider extends AgentProvider {
       pois.length > 0
         ? `- 可用 POI 列表（优先从中选择，也可补充你确知存在的同类地点）：\n${JSON.stringify(pois.slice(0, 30), null, 2)}`
         : `- POI 列表：未提供，请根据你对${cityName}的了解，自行推荐真实的景点、餐饮、住宿地点。`,
-      '',
-      '- 预算分层：根据总预算 ' + budget + ' 元和 ' + days + ' 天，按以下标准推荐：',
-      '  * 如果日均预算 < 300 元：推荐青旅/经济型酒店、当地小吃、免费或低价景点',
-      '  * 如果日均预算 300-600 元：推荐三星/舒适型酒店、口碑餐厅、经典景点',
-      '  * 如果日均预算 600-1000 元：推荐特色民宿/精品酒店、特色餐厅、深度体验',
-      '  * 如果日均预算 > 1000 元：推荐四星及以上酒店、高端餐饮、私人定制体验',
-      '- 当前日均预算约 ' + dailyBudget + ' 元，请按对应档次推荐。',
       '',
       '## 输出规则',
       '1. 严格按以下 JSON 格式输出，不要包含 markdown 代码块标记，不要添加任何额外文字。',
@@ -671,6 +682,13 @@ class GLMAgentProvider extends AgentProvider {
       '8. 每个活动必须包含 duration（分钟）、location（具体地址）、transportToNext（到下一站怎么走+多久）、highlight（一个亮点/看点）。',
       '9. 每天必须包含 accommodation（推荐住宿区域）和 accommodationBudget（当日住宿预算）。',
       '10. transportToNext 描述从当前活动地点到下一个活动地点的交通方式和预计时间。',
+      `11. 预算适配：根据预算档位 ${budgetTier}（${budgetTierDesc}），推荐相应档次的住宿、餐饮和活动：
+   - 经济型（<¥200/天）：青年旅舍/经济型酒店、小吃/快餐/路边摊、免费景点+公园+步行
+   - 标准型（¥200-400/天）：连锁快捷酒店、大众餐馆/特色小吃、主要景点门票
+   - 舒适型（¥400-700/天）：三星或精品酒店、当地口碑餐厅/特色菜、景点+体验活动
+   - 品质型（¥700-1200/天）：四星或设计酒店、知名餐厅/预约私房菜、深度文化体验/小团
+   - 奢华型（>¥1200/天）：五星或度假酒店、米其林/黑珍珠餐厅、私人定制/直升机等高端体验
+   每个活动的 budget 字段应反映实际档次。`,
       '',
       '## 输出格式',
       JSON.stringify({
@@ -840,17 +858,20 @@ class MockAgentProvider extends AgentProvider {
       pois = []
     } = params || {};
 
-    const dayBudget = Math.floor(budget / Math.max(1, days));
-    let budgetTier = 'budget';
-    if (dayBudget > 1000) budgetTier = 'luxury';
-    else if (dayBudget > 600) budgetTier = 'comfort';
-    else if (dayBudget > 300) budgetTier = 'standard';
+    const dayBudget = Math.round(budget / Math.max(1, days));
+    let budgetTier, budgetTierDesc;
+    if (dayBudget < 200) { budgetTier = 'budget'; budgetTierDesc = '经济型'; }
+    else if (dayBudget < 400) { budgetTier = 'standard'; budgetTierDesc = '标准型'; }
+    else if (dayBudget < 700) { budgetTier = 'comfort'; budgetTierDesc = '舒适型'; }
+    else if (dayBudget < 1200) { budgetTier = 'premium'; budgetTierDesc = '品质型'; }
+    else { budgetTier = 'luxury'; budgetTierDesc = '奢华型'; }
 
     const accommodationByTier = {
-      budget: cityName + '市中心经济型酒店/青旅',
-      standard: cityName + '舒适型酒店/连锁三星',
-      comfort: cityName + '特色民宿/精品酒店',
-      luxury: cityName + '四星及以上酒店/高端度假村'
+      budget: cityName + '青年旅舍/经济型酒店（约¥80/晚）',
+      standard: cityName + '连锁快捷酒店（约¥150-200/晚）',
+      comfort: cityName + '精品酒店/舒适型民宿（约¥300-400/晚）',
+      premium: cityName + '四星级酒店/设计型民宿（约¥500-800/晚）',
+      luxury: cityName + '五星度假酒店（约¥1000+/晚）'
     };
 
     const mockDays = [];
