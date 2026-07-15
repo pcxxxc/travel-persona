@@ -107,7 +107,8 @@
             hardMax: plan.tripContext.budget.hardMax,
             saveTarget: plan.tripContext.budget.saveTarget
           },
-          season: plan.tripContext.season || 'unknown'
+          season: plan.tripContext.season || 'unknown',
+          travelStyle: plan.tripContext.travelStyle || 'balanced'
         }
       };
 
@@ -122,7 +123,8 @@
           destination: requestBody.tripIntent.destination || '',
           days: requestBody.tripContext.days,
           dates: requestBody.tripContext.dates ? { start: requestBody.tripContext.dates.start } : undefined,
-          budget: Object.assign({}, requestBody.tripContext.budget)
+          budget: Object.assign({}, requestBody.tripContext.budget),
+          travelStyle: requestBody.tripContext.travelStyle
         }
       };
       sendTelemetry({
@@ -218,10 +220,12 @@
     var intent = savedContext.tripIntent || state.plan.tripIntent || {};
     var facts = [];
     if (context.origin) facts.push(context.origin + '出发');
-    if (context.destination) facts.push(context.destination + '必到');
+    if (context.destination) facts.push('目的地 ' + context.destination);
     if (context.days) facts.push(context.days + ' 天');
     if (context.budget?.hardMax) facts.push('最高 ' + formatCurrency(context.budget.hardMax));
     if (context.budget?.saveTarget) facts.push('希望再省 ' + formatCurrency(context.budget.saveTarget));
+    var travelStyleLabels = { value: '性价比优先', balanced: '舒适平衡', depth: '深度体验', premium: '品质享受' };
+    if (travelStyleLabels[context.travelStyle]) facts.push(travelStyleLabels[context.travelStyle]);
 
     var avoidLabels = (intent.avoid || []).map(function (key) {
       var item = AVOIDS.find(function (option) { return option.key === key; });
@@ -268,7 +272,7 @@
     page.appendChild(el('div', { className: 'page-kicker', textContent: 'DECISION PATHS' }));
     page.appendChild(el('h1', { className: 'page__title', textContent: multiCityPlan ? multiCityPlan.title : '三种都合理，但代价不同' }));
     page.appendChild(el('p', { className: 'page__subtitle', textContent: multiCityPlan
-      ? (multiCityPlan.summary || '把去程、必到城市和返程放在一条线上计算；路线留有删减空间，不用把所有城市都玩满。')
+      ? (multiCityPlan.summary || '把去程、目的地和返程放在一条线上计算；路线留有删减空间，不用把所有城市都玩满。')
       : '先选一条作为当前方案。你之后的删除、替换和真实体验也会成为理解你的证据。' }));
 
     page.appendChild(renderDecisionBrief(result, multiCityPlan));

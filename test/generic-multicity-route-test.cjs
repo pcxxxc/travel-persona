@@ -71,6 +71,13 @@ const centralSouthRoute = build({ origin: '南京', destination: '桂林', days:
 const centralSouthCities = new Set(centralSouthRoute.variants.flatMap(variant => variant.nodes.map(node => node.city)));
 assert.ok(centralSouthCities.has('南昌'), '南京到桂林长线应使用南昌减少被动留白');
 
+const sparseCorridorRoute = build({ origin: '茂名', destination: '大理', days: 17 });
+assert.ok(sparseCorridorRoute, '补充出发城市在稀疏走廊中也应生成路线');
+assert.strictEqual(sparseCorridorRoute.variants.length, 3);
+assert.ok(sparseCorridorRoute.variants.every(variant => variant.nodes[0].city === '茂名' && variant.nodes.at(-1).city === '茂名'));
+assert.ok(sparseCorridorRoute.variants.every(variant => variant.nodes.some(node => node.city === '大理')));
+assert.ok(sparseCorridorRoute.variants.some(variant => variant.name === '少留白版'), '没有足够顺路城市时应将探索版改为少留白版');
+
 const candidates = buildCandidates(
   { origin: '上海', destination: '成都', interests: ['museum'], avoid: [], userVector: {} },
   getCoordinates('上海'),

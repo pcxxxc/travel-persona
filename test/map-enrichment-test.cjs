@@ -139,6 +139,13 @@ async function run() {
   assert.strictEqual(clientConfig.body.displayProvider, 'baidu-webgl');
   assert.strictEqual(clientConfig.body.baiduWebAk, 'test-browser-key');
 
+  // The server-side Directions key must never become a browser fallback key.
+  delete process.env.BAIDU_WEB_AK;
+  const noBrowserConfig = await request(app).get('/api/v1/map/client-config').expect(200);
+  assert.strictEqual(noBrowserConfig.body.displayProvider, 'route-fallback');
+  assert.strictEqual(noBrowserConfig.body.baiduWebAk, null);
+  process.env.BAIDU_WEB_AK = 'test-browser-key';
+
   const mcpResponse = await request(app)
     .post('/api/v1/map/enrich-plan')
     .send({

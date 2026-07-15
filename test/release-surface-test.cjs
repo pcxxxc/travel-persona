@@ -28,9 +28,17 @@ assert.ok(fs.existsSync(path.join(root, 'public-app', 'index.html')));
 assert.ok(fs.existsSync(path.join(root, 'public-app', 'map-client.js')));
 const appIndex = fs.readFileSync(path.join(root, 'public-app', 'index.html'), 'utf8');
 const mapClient = fs.readFileSync(path.join(root, 'public-app', 'map-client.js'), 'utf8');
+const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+assert.ok(mapClient.includes('api.map.baidu.com'), 'Browser map must use Baidu WebGL');
+assert.ok(mapClient.includes('callback=') && mapClient.includes('__travelPersonaBaiduWebGlReady'), 'Baidu WebGL must wait for its callback');
+assert.ok(mapClient.includes('__travelPersonaBaiduClassicReady'), 'Mobile must have a Baidu non-WebGL fallback');
+assert.ok(mapClient.includes('/api/v1/map/static-route'), 'Map must have a first-party Baidu static-image fallback');
+assert.ok(fs.readFileSync(path.join(root, 'src', 'api', 'v1', 'map.js'), 'utf8').includes("router.get('/static-route'"), 'Map API must proxy the Baidu static image without exposing a server key');
 assert.ok(appIndex.includes('map-client.js'), '用户端必须加载国内地图客户端');
 assert.ok(!appIndex.includes('leaflet'), '用户端不得加载 Leaflet 或外部瓦片依赖');
 assert.ok(!mapClient.includes('openstreetmap.org'), '用户端不得回退到 OpenStreetMap');
+assert.ok(!serverSource.includes('openstreetmap.org'), '服务端不得代理 OpenStreetMap 瓦片');
+assert.ok(!serverSource.includes('/api/v1/map/tile/'), '服务端不得保留外部瓦片代理入口');
 
 const runtimeSources = [
   path.join(root, 'src', 'data', 'cityRecords.js'),

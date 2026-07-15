@@ -199,7 +199,8 @@
           hardMax: null,       // 可接受上限
           saveTarget: null     // 节省目标
         },
-        season: 'unknown'
+        season: 'unknown',
+        travelStyle: 'balanced'
       },
       result: null,          // PlanResponse
       selectedPathType: 'balanced',
@@ -949,14 +950,14 @@
           el('div', {}, [
             el('h2', { id: 'trip-route-title', className: 'sampling-title', textContent: trip.status === 'planning' ? '这条路线现在怎么走' : '当时保存的路线' }),
             el('p', { className: 'sampling-note', textContent: trip.status === 'planning'
-              ? '中间城市可以继续删；起点、终点和必到城市会被保留。'
+              ? '中间城市可以继续删；起点、终点和你选定的目的地会被保留。'
               : '原计划已经冻结；实际少去、久留和临时变化会单独记录，不反向改写计划。' })
           ])
         ])
       ]);
       var routeList = el('ol', { className: 'trip-route__list' });
       nodes.forEach(function (node, index) {
-        var protectedNode = trip.status !== 'planning' || index === 0 || index === nodes.length - 1 || node.city === snapshot.multiCityPlan?.destination || node.city === '北京';
+        var protectedNode = trip.status !== 'planning' || index === 0 || index === nodes.length - 1 || node.city === snapshot.multiCityPlan?.destination;
         var nodeTips = [];
         var seenNodeTips = {};
         (node.dayPlans || []).flatMap(function (day) { return day.pois || []; }).forEach(function (poi) {
@@ -981,7 +982,7 @@
             nodeTips.length ? el('ul', { className: 'trip-route__tips' }, nodeTips.map(function (tip) { return el('li', { textContent: tip }); })) : null
           ]),
           protectedNode
-            ? el('span', { className: 'tag', textContent: trip.status !== 'planning' ? '计划' : node.city === snapshot.multiCityPlan?.destination || node.city === '北京' ? '必到' : '保留' })
+            ? el('span', { className: 'tag', textContent: trip.status !== 'planning' ? '计划' : node.city === snapshot.multiCityPlan?.destination ? '目的地' : '保留' })
             : el('button', {
                 type: 'button',
                 className: 'icon-button trip-route__remove',
@@ -1994,7 +1995,7 @@
         placeholder: fullReview
           ? '例如：我开心了，我出发了，我到了，我看见了。真正留下来的不是去了多少地方，而是……'
           : routeContext
-          ? '例如：我删掉这里，不是因为不喜欢，而是这次预算更想留给北京，也不想再多换一次车。'
+          ? '例如：我删掉这里，不是因为不喜欢，而是这次预算更想留给目的地，也不想再多换一次车。'
           : '例如：原本收藏了很多景点，最后删到每天两个。少赶路之后，我反而更记得那些街区和偶遇。',
         textContent: draft.content,
         onInput: function () { draft.content = this.value; draft.error = null; }

@@ -3,16 +3,18 @@
 
   var configPromise = null;
   var sdkPromise = null;
-  var leafletPromise = null;
+  var classicSdkPromise = null;
   var renderId = 0;
 
-  function getConfig() {
+  function getClientConfig() {
     if (!configPromise) {
-      configPromise = fetch('/api/v1/map/client-config', { credentials: 'same-origin' })
-        .then(function (response) {
-          if (!response.ok) throw new Error('Map client configuration is unavailable');
-          return response.json();
-        });
+      configPromise = fetch('/api/v1/map/client-config', {
+        credentials: 'same-origin',
+        cache: 'no-store'
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Map client configuration is unavailable');
+        return response.json();
+      });
     }
     return configPromise;
   }
@@ -22,37 +24,83 @@
     if (sdkPromise) return sdkPromise;
 
     sdkPromise = new Promise(function (resolve, reject) {
-      // 先尝试直接加载 SDK 脚本
+      var settled = false;
+      var callbackName = '__travelPersonaBaiduWebGlReady';
       var script = document.createElement('script');
+      function finish(error) {
+        if (settled) return;
+        settled = true;
+        global.clearTimeout(timer);
+        global[callbackName] = function () {};
+        if (error) reject(error);
+        else resolve(global.BMapGL);
+      }
+      var timer = global.setTimeout(function () {
+        finish(new Error('Baidu WebGL SDK load timeout'));
+      }, 12000);
+
+      global[callbackName] = function () {
+        if (global.BMapGL) finish(null);
+        else finish(new Error('Baidu WebGL SDK did not initialize'));
+      };
       script.async = true;
-      script.src = 'https://api.map.baidu.com/api?v=1.0&type=webgl&ak=' + encodeURIComponent(ak);
-      var resolved = false;
-      var loadTimeout = setTimeout(function () {
-        if (!resolved) { resolved = true; reject(new Error('Baidu WebGL SDK load timeout (8s)')); }
-      }, 8000);
+      script.src = 'https://api.map.baidu.com/api?v=1.0&type=webgl&ak=' + encodeURIComponent(ak) + '&callback=' + callbackName;
       script.onload = function () {
-        clearTimeout(loadTimeout);
-        if (resolved) return;
-        // SDK 脚本加载后，BMapGL 可能需要额外时间初始化
-        var pollCount = 0;
-        var pollInterval = setInterval(function () {
-          pollCount++;
-          if (global.BMapGL) {
-            clearInterval(pollInterval);
-            if (!resolved) { resolved = true; resolve(global.BMapGL); }
-          } else if (pollCount > 20) {
-            clearInterval(pollInterval);
-            if (!resolved) { resolved = true; reject(new Error('BMapGL not available after script loaded')); }
-          }
-        }, 200);
+        global.setTimeout(function () {
+          if (global.BMapGL) finish(null);
+        }, 0);
       };
       script.onerror = function () {
-        clearTimeout(loadTimeout);
-        if (!resolved) { resolved = true; reject(new Error('Baidu WebGL SDK script load error')); }
+        finish(new Error('Baidu WebGL SDK script load error'));
       };
       document.head.appendChild(script);
+    }).catch(function (error) {
+      sdkPromise = null;
+      throw error;
     });
     return sdkPromise;
+  }
+
+  function loadBaiduClassic(ak) {
+    if (global.BMap) return Promise.resolve(global.BMap);
+    if (classicSdkPromise) return classicSdkPromise;
+
+    classicSdkPromise = new Promise(function (resolve, reject) {
+      var settled = false;
+      var callbackName = '__travelPersonaBaiduClassicReady';
+      var script = document.createElement('script');
+      function finish(error) {
+        if (settled) return;
+        settled = true;
+        global.clearTimeout(timer);
+        global[callbackName] = function () {};
+        if (error) reject(error);
+        else resolve(global.BMap);
+      }
+      var timer = global.setTimeout(function () {
+        finish(new Error('Baidu classic SDK load timeout'));
+      }, 12000);
+
+      global[callbackName] = function () {
+        if (global.BMap) finish(null);
+        else finish(new Error('Baidu classic SDK did not initialize'));
+      };
+      script.async = true;
+      script.src = 'https://api.map.baidu.com/api?v=3.0&ak=' + encodeURIComponent(ak) + '&callback=' + callbackName;
+      script.onload = function () {
+        global.setTimeout(function () {
+          if (global.BMap) finish(null);
+        }, 0);
+      };
+      script.onerror = function () {
+        finish(new Error('Baidu classic SDK script load error'));
+      };
+      document.head.appendChild(script);
+    }).catch(function (error) {
+      classicSdkPromise = null;
+      throw error;
+    });
+    return classicSdkPromise;
   }
 
   function transformLat(lng, lat) {
@@ -110,14 +158,13 @@
     container.appendChild(fallback);
   }
 
-  function addSourceLabel(container, text) {
+  function addSourceLabel(container) {
     var label = document.createElement('div');
     label.className = 'map-source-label';
-    label.textContent = text || '百度地图 · 中国大陆';
+    label.textContent = '百度地图 · 中国大陆';
     container.appendChild(label);
   }
 
-  /* ── 百度 WebGL 地图绘制 ── */
   function drawBaiduMap(container, BMapGL, points, options) {
     container.classList.remove('plan-map--fallback');
     container.innerHTML = '';
@@ -125,152 +172,149 @@
     map.enableScrollWheelZoom(false);
     if (BMapGL.ZoomControl) map.addControl(new BMapGL.ZoomControl());
 
-    var bdPoints = points.map(function (item) {
-      var bd = wgs84ToBd09(item.coordinates.lat, item.coordinates.lng);
-      return new BMapGL.Point(bd.lng, bd.lat);
-    });
-
-    if (options.origin) {
-      var origin = validPoint(options.origin);
-      if (origin) {
-        var originBd = wgs84ToBd09(origin.coordinates.lat, origin.coordinates.lng);
-        var originPoint = new BMapGL.Point(originBd.lng, originBd.lat);
-        map.addOverlay(new BMapGL.Marker(originPoint));
-        bdPoints.push(originPoint);
-      }
-    }
-
+    var viewportPoints = [];
+    var routePoints = [];
     points.forEach(function (item, index) {
-      var marker = new BMapGL.Marker(bdPoints[index]);
+      var bd = wgs84ToBd09(item.coordinates.lat, item.coordinates.lng);
+      var point = new BMapGL.Point(bd.lng, bd.lat);
+      viewportPoints.push(point);
+      routePoints.push(point);
+      var marker = new BMapGL.Marker(point);
       marker.setTitle(item.name);
       map.addOverlay(marker);
       if (item.name && BMapGL.Label && BMapGL.Size) {
         var label = new BMapGL.Label(String(index + 1) + ' ' + item.name, {
-          position: bdPoints[index],
+          position: point,
           offset: new BMapGL.Size(12, -26)
         });
-        label.setStyle({
-          color: '#173026',
-          backgroundColor: '#ffffff',
-          border: '1px solid #c9ddd2',
-          borderRadius: '3px',
-          padding: '3px 5px',
-          fontSize: '11px',
-          lineHeight: '15px'
-        });
+        label.setStyle({ color: '#173026', backgroundColor: '#ffffff', border: '1px solid #c9ddd2', borderRadius: '3px', padding: '3px 5px', fontSize: '11px', lineHeight: '15px' });
         map.addOverlay(label);
       }
     });
 
-    if (options.drawRoute && bdPoints.length > 1) {
-      map.addOverlay(new BMapGL.Polyline(bdPoints, {
-        strokeColor: '#2d6a4f',
-        strokeWeight: 4,
-        strokeOpacity: 0.78
-      }));
+    var origin = validPoint(options.origin);
+    if (origin) {
+      var originBd = wgs84ToBd09(origin.coordinates.lat, origin.coordinates.lng);
+      var originPoint = new BMapGL.Point(originBd.lng, originBd.lat);
+      viewportPoints.push(originPoint);
+      map.addOverlay(new BMapGL.Marker(originPoint));
     }
 
-    if (bdPoints.length > 1) {
-      map.setViewport(bdPoints, { margins: [30, 30, 30, 30] });
-    } else {
-      map.centerAndZoom(bdPoints[0], options.zoom || 11);
+    if (options.drawRoute && routePoints.length > 1) {
+      map.addOverlay(new BMapGL.Polyline(routePoints, { strokeColor: '#2d6a4f', strokeWeight: 4, strokeOpacity: 0.78 }));
     }
-    addSourceLabel(container, '百度地图 · 中国大陆');
+    if (viewportPoints.length > 1) map.setViewport(viewportPoints, { margins: [30, 30, 30, 30] });
+    else map.centerAndZoom(viewportPoints[0], options.zoom || 11);
+    addSourceLabel(container);
   }
 
-  /* ── Leaflet + 高德瓦片降级 ── */
-  function loadLeafletScript() {
-    if (window.L) return Promise.resolve(window.L);
-    if (leafletPromise) return leafletPromise;
-    var s = document.createElement('script');
-    s.src = '/app/vendor/leaflet/leaflet.js';
-    document.head.appendChild(s);
-    leafletPromise = new Promise(function (resolve, reject) {
-      s.onload = function () { resolve(window.L); };
-      s.onerror = function () { reject(new Error('Leaflet SDK load failed')); };
-    });
-    return leafletPromise;
-  }
+  function drawBaiduClassicMap(container, BMap, points, options) {
+    container.classList.remove('plan-map--fallback');
+    container.innerHTML = '';
+    var map = new BMap.Map(container, { enableMapClick: false });
+    map.enableScrollWheelZoom(false);
+    if (BMap.NavigationControl) map.addControl(new BMap.NavigationControl({ anchor: global.BMAP_ANCHOR_TOP_LEFT }));
 
-  function loadLeafletFallback(container, points, options) {
-    return loadLeafletScript().then(function (L) {
-      container.innerHTML = '';
-      container.classList.remove('plan-map--fallback');
-      container.style.minHeight = '240px';
-
-      var first = points[0];
-      var map = L.map(container).setView([first.coordinates.lat, first.coordinates.lng], options.zoom || 6);
-
-      // 高德瓦片（通过本地代理，国内可用）
-      L.tileLayer('/api/v1/map/tile/amap/{z}/{x}/{y}', {
-        maxZoom: 18,
-        attribution: '&copy; 高德地图'
-      }).addTo(map);
-
-      // 目的地标记
-      var coordsList = [];
-      points.forEach(function (p) {
-        var latlng = [p.coordinates.lat, p.coordinates.lng];
-        coordsList.push(latlng);
-        L.marker(latlng).addTo(map).bindPopup(p.name || '目的地');
-      });
-
-      // 出发地标记（紫色圆点）
-      if (options.origin) {
-        var ov = validPoint(options.origin);
-        if (ov) {
-          L.circleMarker([ov.coordinates.lat, ov.coordinates.lng], {
-            radius: 8, fillColor: '#6366F1', color: '#fff', weight: 2, fillOpacity: 1
-          }).addTo(map).bindPopup('出发地');
-        }
+    var viewportPoints = [];
+    var routePoints = [];
+    points.forEach(function (item, index) {
+      var bd = wgs84ToBd09(item.coordinates.lat, item.coordinates.lng);
+      var point = new BMap.Point(bd.lng, bd.lat);
+      viewportPoints.push(point);
+      routePoints.push(point);
+      var marker = new BMap.Marker(point);
+      marker.setTitle(item.name);
+      map.addOverlay(marker);
+      if (item.name && BMap.Label && BMap.Size) {
+        var label = new BMap.Label(String(index + 1) + ' ' + item.name, {
+          position: point,
+          offset: new BMap.Size(12, -26)
+        });
+        label.setStyle({ color: '#173026', backgroundColor: '#ffffff', border: '1px solid #c9ddd2', borderRadius: '3px', padding: '3px 5px', fontSize: '11px', lineHeight: '15px' });
+        map.addOverlay(label);
       }
-
-      // 连线
-      if (coordsList.length > 1) {
-        L.polyline(coordsList, { color: '#2d6a4f', weight: 3, opacity: 0.8 }).addTo(map);
-        map.fitBounds(coordsList, { padding: [30, 30] });
-      }
-
-      addSourceLabel(container, '高德地图 · 降级模式');
-      return true;
-    }).catch(function () {
-      showFallback(container, '地图服务暂不可用，路线顺序仍已保留。');
-      return false;
     });
+
+    var origin = validPoint(options.origin);
+    if (origin) {
+      var originBd = wgs84ToBd09(origin.coordinates.lat, origin.coordinates.lng);
+      var originPoint = new BMap.Point(originBd.lng, originBd.lat);
+      viewportPoints.push(originPoint);
+      map.addOverlay(new BMap.Marker(originPoint));
+    }
+
+    if (options.drawRoute && routePoints.length > 1) {
+      map.addOverlay(new BMap.Polyline(routePoints, { strokeColor: '#2d6a4f', strokeWeight: 4, strokeOpacity: 0.78 }));
+    }
+    if (viewportPoints.length > 1) map.setViewport(viewportPoints, { margins: [30, 30, 30, 30] });
+    else map.centerAndZoom(viewportPoints[0], options.zoom || 11);
+    addSourceLabel(container);
   }
 
-  /* ── 统一入口 ── */
+  function drawBaiduStaticMap(container, points, options) {
+    var routeValues = points.slice();
+    var origin = validPoint(options.origin);
+    if (origin && !routeValues.some(function (item) {
+      return item.coordinates.lat === origin.coordinates.lat && item.coordinates.lng === origin.coordinates.lng;
+    })) routeValues.unshift(origin);
+    var serialized = routeValues.map(function (item) {
+      return item.coordinates.lng.toFixed(6) + ',' + item.coordinates.lat.toFixed(6);
+    }).join(';');
+    if (!serialized) return;
+
+    container.classList.remove('plan-map--fallback');
+    container.innerHTML = '';
+    var image = document.createElement('img');
+    image.className = 'plan-map__static-image';
+    image.alt = 'Baidu Map route overview';
+    image.decoding = 'async';
+    image.src = '/api/v1/map/static-route?points=' + encodeURIComponent(serialized);
+    image.onerror = function () {
+      if (image.isConnected) showFallback(container, 'Route order is available while the map refreshes.');
+    };
+    container.appendChild(image);
+    addSourceLabel(container);
+  }
+
   function render(container, values, options) {
     var points = (values || []).map(validPoint).filter(Boolean);
     if (!container) return Promise.resolve(false);
     if (!points.length) {
-      showFallback(container, '这组结果暂时缺少可用坐标。');
+      showFallback(container, '这组结果暂时缺少可验证坐标，路线顺序仍可正常使用。');
       return Promise.resolve(false);
     }
     var currentRender = String(++renderId);
     container.dataset.travelMapRender = currentRender;
 
-    // 优先百度 WebGL
-    return getConfig()
-      .then(function (config) {
-        if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
-        if (config.displayProvider !== 'baidu-webgl' || !config.baiduWebAk) {
-          // 无百度 AK，直接降级 Leaflet
-          return loadLeafletFallback(container, points, options || {});
-        }
-        return loadBaiduWebGl(config.baiduWebAk)
-          .then(function (BMapGL) {
+    return getClientConfig().then(function (config) {
+      if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
+      if (config.country !== 'CN' || config.displayProvider !== 'baidu-webgl' || !config.baiduWebAk) {
+        showFallback(container, '国内地图暂时不可用，已保留路线顺序与城市间交通核验信息。');
+        return false;
+      }
+      drawBaiduStaticMap(container, points, options || {});
+      if (config.interactiveMap) {
+        loadBaiduWebGl(config.baiduWebAk).then(function (BMapGL) {
+          if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
+          drawBaiduMap(container, BMapGL, points, options || {});
+          return true;
+        }).catch(function () {
+          return loadBaiduClassic(config.baiduWebAk).then(function (BMap) {
             if (currentRender !== container.dataset.travelMapRender || !container.isConnected) return false;
-            drawBaiduMap(container, BMapGL, points, options || {});
+            drawBaiduClassicMap(container, BMap, points, options || {});
             return true;
           });
-      })
-      .catch(function () {
-        if (currentRender === container.dataset.travelMapRender && container.isConnected) {
-          return loadLeafletFallback(container, points, options || {});
-        }
-        return false;
-      });
+        }).catch(function () {
+          return false;
+        });
+      }
+      return true;
+    }).catch(function () {
+      if (currentRender === container.dataset.travelMapRender && container.isConnected && !container.querySelector('.plan-map__static-image')) {
+        showFallback(container, '地图暂未连通，路线顺序与本地方案不受影响。');
+      }
+      return false;
+    });
   }
 
   global.TravelMap = {
@@ -278,10 +322,10 @@
       return render(container, points, { origin: origin, drawRoute: Boolean(isMultiCity), zoom: 11 });
     },
     renderDay: function (container, pois, cityCenter) {
-      var pointValues = (pois || []).map(function (poi) {
+      var values = (pois || []).map(function (poi) {
         return { name: poi.name, coordinates: poi.coordinates || { lat: poi.lat, lng: poi.lng } };
       });
-      return render(container, pointValues, { origin: cityCenter ? { coordinates: cityCenter } : null, drawRoute: false, zoom: 14 });
+      return render(container, values, { origin: cityCenter ? { coordinates: cityCenter } : null, drawRoute: false, zoom: 14 });
     }
   };
 })(window);

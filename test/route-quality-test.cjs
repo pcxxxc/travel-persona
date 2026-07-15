@@ -60,4 +60,17 @@ assert.ok(shortPlan.variants.find(item => item.id === 'steady').routeAssessment.
 assert.ok(shortPlan.redFlags.some(item => item.includes('14 天内超过 7 个住宿城市')));
 assert.ok(shortPlan.redFlags.every(item => !item.includes('18 天内超过 9 个住宿城市')));
 
+const valuePlan = buildRouteExperiment({
+  routeGoal: 'multiCityValue', origin: '茂名', destination: '北京', days: 18,
+  budget: 900, totalBudget: 16200, hardMax: 18000, travelStyle: 'value'
+});
+const premiumPlan = buildRouteExperiment({
+  routeGoal: 'multiCityValue', origin: '茂名', destination: '北京', days: 18,
+  budget: 900, totalBudget: 16200, hardMax: 18000, travelStyle: 'premium'
+});
+assert.strictEqual(valuePlan.budgetModel.travelStyle.id, 'value');
+assert.strictEqual(premiumPlan.budgetModel.travelStyle.id, 'premium');
+assert.ok(valuePlan.primary.costRange.max < premiumPlan.primary.costRange.max, '不同旅行风格必须产生不同成本区间');
+assert.ok(premiumPlan.budgetModel.travelStyle.stay.includes('高品质'));
+
 console.log('Multi-city route quality tests passed.');

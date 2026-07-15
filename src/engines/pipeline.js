@@ -19,7 +19,7 @@ const { localGeocode } = require('../services/map/nominatimProvider');
 const { getWeather } = require('../services/weather/weatherService');
 const { getActiveProvider } = require('../services/map/mapProvider');
 const { getTravelFriendliness } = require('../services/ops/holidayService');
-const { buildRouteExperiment } = require('../services/fallbackPlanner');
+const { applyTravelStyleToRoutePlan } = require('../services/fallbackPlanner');
 const { buildGenericRouteExperiment } = require('../services/route/genericMultiCityPlanner');
 const { buildCityDayPlans } = require('../services/route/routeDayPlanner');
 const {
@@ -542,25 +542,7 @@ async function generatePlan(input) {
   // --- 步骤 13: 构建最终响应 ---
   let multiCityPlan = null;
   const destinationText = String(effectiveTripContext.destination || '').trim();
-  const isMaomingBeijingLongTrip = /茂名/.test(originText)
-    && /北京/.test(destinationText)
-    && Number(effectiveTripContext.days) >= 14
-    && Number(effectiveTripContext.days) <= 21;
-  if (isMaomingBeijingLongTrip) {
-    const totalComfortBudget = Number(effectiveTripContext.budget?.comfort) || 0;
-    multiCityPlan = buildRouteExperiment({
-      origin: originText,
-      destination: destinationText,
-      days: Number(effectiveTripContext.days),
-      budget: totalComfortBudget > 0
-        ? Math.round(totalComfortBudget / Number(effectiveTripContext.days))
-        : 320,
-      totalBudget: totalComfortBudget,
-      hardMax: Number(effectiveTripContext.budget?.hardMax) || null,
-      avoid: effectiveTripIntent.avoid || [],
-      routeGoal: 'multiCityValue'
-    });
-  } else if (destinationText && Number(effectiveTripContext.days) >= 10 && Number(effectiveTripContext.days) <= 21) {
+  if (destinationText && Number(effectiveTripContext.days) >= 10 && Number(effectiveTripContext.days) <= 21) {
     const totalComfortBudget = Number(effectiveTripContext.budget?.comfort) || 0;
     multiCityPlan = buildGenericRouteExperiment({
       origin: originText,
@@ -575,6 +557,12 @@ async function generatePlan(input) {
       interests: effectiveTripIntent.interests || [],
       mood: effectiveTripIntent.mood,
       userVector
+    });
+    multiCityPlan = applyTravelStyleToRoutePlan(multiCityPlan, {
+      days: Number(effectiveTripContext.days),
+      totalBudget: totalComfortBudget,
+      hardMax: Number(effectiveTripContext.budget?.hardMax) || null,
+      travelStyle: effectiveTripContext.travelStyle || 'balanced'
     });
   }
   if (multiCityPlan?.primary?.nodes) {

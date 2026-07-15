@@ -11,6 +11,7 @@ const monitoring = require('../../services/ops/monitoring');
 const MAX_CITIES = 12;
 const MAX_POIS = 12;
 const MAX_TRANSIT_LEGS = 10;
+const MAX_STATIC_ROUTE_POINTS = 20;
 
 function uniqueStrings(values, limit) {
   return Array.from(new Set((Array.isArray(values) ? values : [])
@@ -51,6 +52,31 @@ function normalizeTransitRequests(values) {
 function normalizeDepartureDate(value) {
   const date = String(value || '').trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`)) ? date : '';
+}
+
+function normalizeStaticRoutePoints(value) {
+  return String(value || '')
+    .split(';')
+    .map(pair => pair.split(',').map(Number))
+    .filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat)
+      && lng >= 72 && lng <= 136 && lat >= 3 && lat <= 55)
+    .slice(0, MAX_STATIC_ROUTE_POINTS);
+}
+
+function buildStaticBounds(points) {
+  const longitudes = points.map(([lng]) => lng);
+  const latitudes = points.map(([, lat]) => lat);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const padLng = Math.max(0.35, (maxLng - minLng) * 0.16);
+  const padLat = Math.max(0.25, (maxLat - minLat) * 0.16);
+  return `${minLng - padLng},${minLat - padLat};${maxLng + padLng},${maxLat + padLat}`;
+}
+
+function getStaticMapAk() {
+  return String(process.env.BAIDU_STATIC_AK || process.env.BAIDU_MAP_AK || process.env.BAIDU_MAP_API_KEY || '').trim();
 }
 
 function toWgs84(provider, location) {
@@ -230,12 +256,55 @@ async function enrichTransitLeg(provider, request, departureDate) {
 }
 
 router.get('/client-config', (req, res) => {
-  const baiduWebAk = String(process.env.BAIDU_WEB_AK || process.env.BAIDU_MAP_AK || '').trim();
+  // Browser and MCP credentials have different exposure rules. Never surface the server AK.
+  const baiduWebAk = String(process.env.BAIDU_WEB_AK || '').trim();
   res.json({
     country: 'CN',
     displayProvider: baiduWebAk ? 'baidu-webgl' : 'route-fallback',
-    baiduWebAk: baiduWebAk || null
+    baiduWebAk: baiduWebAk || null,
+    interactiveMap: process.env.BAIDU_INTERACTIVE_MAP === 'true'
   });
+});
+
+router.get('/static-route', async (req, res) => {
+  const points = normalizeStaticRoutePoints(req.query.points);
+  const ak = getStaticMapAk();
+  if (points.length < 2 || !ak) {
+    return res.status(400).json({ code: 'TP-1012', type: 'VALIDATION', message: 'Static route map is unavailable', userVisible: false });
+  }
+
+  const params = new URLSearchParams({
+    ak,
+    width: '512',
+    height: '260',
+    scale: '2',
+    dpiType: 'ph',
+    coordtype: 'wgs84ll',
+    bbox: buildStaticBounds(points),
+    markers: points.map(([lng, lat]) => `${lng},${lat}`).join('|'),
+    markerStyles: points.map((_, index) => `m,${(index + 1) % 10},0x2D6A4F`).join('|'),
+    paths: points.map(([lng, lat]) => `${lng},${lat}`).join(';'),
+    pathStyles: '0x2D6A4F,5,0.78',
+    copyright: '1'
+  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(`https://api.map.baidu.com/staticimage/v2?${params}`, { signal: controller.signal });
+    const contentType = String(response.headers.get('content-type') || '');
+    if (!response.ok || !contentType.startsWith('image/')) {
+      return res.status(502).json({ code: 'TP-1013', type: 'MAP_PROVIDER', message: 'Static map provider failed', userVisible: false });
+    }
+    const body = Buffer.from(await response.arrayBuffer());
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    return res.send(body);
+  } catch (error) {
+    return res.status(502).json({ code: 'TP-1014', type: 'MAP_PROVIDER', message: 'Static map provider unavailable', userVisible: false });
+  } finally {
+    clearTimeout(timer);
+  }
 });
 
 router.post('/enrich-plan', async (req, res) => {

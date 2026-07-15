@@ -1091,6 +1091,99 @@ function fitVariantToDays(variant, requestedDays) {
   return fitted;
 }
 
+const TRAVEL_STYLE_RULES = {
+  value: {
+    label: '性价比优先', costMultiplier: 0.82, minimumDaily: 330,
+    summary: '先把预算留给真正想体验的部分，住宿与餐饮优先稳定、交通便利。',
+    stay: '青年旅舍或经济型酒店，优先地铁可达的非核心区。',
+    dining: '本地小吃与高口碑平价正餐，不为网红排队溢价买单。',
+    experiences: '免费开放空间、低价门票和一项最想做的付费体验。'
+  },
+  balanced: {
+    label: '舒适平衡', costMultiplier: 1, minimumDaily: 520,
+    summary: '用稳定的住宿和餐饮换取更少的临时取舍，保留经典体验。',
+    stay: '舒适型酒店或品质民宿，优先交通节点附近且隔音稳定的房源。',
+    dining: '一顿口碑正餐搭配在地小店，预留少量咖啡与夜间体验。',
+    experiences: '经典景点与一项预约型体验，避免把同类项目重复堆叠。'
+  },
+  depth: {
+    label: '深度体验', costMultiplier: 1.16, minimumDaily: 760,
+    summary: '减少打卡密度，把预算放到有在地感的住宿、餐饮和完整体验上。',
+    stay: '特色民宿或精品酒店，围绕一个街区连续停留而非频繁换房。',
+    dining: '预留特色餐厅或地方料理，至少安排一顿需要提前确认的用餐。',
+    experiences: '文化场馆、演出或小团体验择一深入，给现场留出完整时段。'
+  },
+  premium: {
+    label: '品质享受', costMultiplier: 1.38, minimumDaily: 1100,
+    summary: '以更高的住宿、餐饮和体验质量降低摩擦，但仍不牺牲路线效率。',
+    stay: '高品质酒店或设计感住宿，优先位置、睡眠质量和服务稳定性。',
+    dining: '预约型餐厅与当地代表性餐饮结合，保留可替换的备选位。',
+    experiences: '高质量导览、演出或私享体验按日程留出余量，不做价格虚高的填充。'
+  }
+};
+
+function getBudgetStatus(costRange, hardMax, totalBudget) {
+  const ceiling = Number(hardMax || totalBudget || 0);
+  if (!ceiling) return '费用待出发日前核验';
+  if (Number(costRange.min) > ceiling) return '预计超过上限';
+  if (Number(costRange.max) > ceiling) return '需要取舍';
+  return '在预算上限内';
+}
+
+function buildTravelStyleModel(profile = {}) {
+  const style = TRAVEL_STYLE_RULES[profile.travelStyle] || TRAVEL_STYLE_RULES.balanced;
+  const days = Math.max(1, Number(profile.days) || 1);
+  const ceiling = Number(profile.hardMax || profile.totalBudget || 0);
+  const dailyCeiling = ceiling ? Math.round(ceiling / days) : 0;
+  const needsTradeoff = dailyCeiling > 0 && dailyCeiling < style.minimumDaily;
+  return {
+    id: profile.travelStyle in TRAVEL_STYLE_RULES ? profile.travelStyle : 'balanced',
+    label: style.label,
+    costMultiplier: style.costMultiplier,
+    summary: style.summary,
+    stay: style.stay,
+    dining: style.dining,
+    experiences: style.experiences,
+    status: needsTradeoff ? '预算需要取舍' : '预算匹配',
+    budgetNote: needsTradeoff
+      ? `当前日均上限约 ${dailyCeiling} 元，低于“${style.label}”的常见档位；系统保留你的偏好，但会优先删去低价值溢价项，不突破上限。`
+      : dailyCeiling
+        ? `当前日均上限约 ${dailyCeiling} 元；价格会随出发日和预订窗口变化，保存前仍需核验。`
+        : '尚未给出预算上限，结果按当前风格估算，建议在保存前补充可接受上限。'
+  };
+}
+
+function scaleCostRange(costRange, multiplier) {
+  return {
+    min: Math.round((Number(costRange?.min || 0) * multiplier) / 100) * 100,
+    max: Math.round((Number(costRange?.max || 0) * multiplier) / 100) * 100
+  };
+}
+
+function applyTravelStyleToRoutePlan(routePlan, profile = {}) {
+  if (!routePlan) return routePlan;
+  const travelStyle = buildTravelStyleModel(profile);
+  const hardMax = Number(profile.hardMax || routePlan.budgetModel?.hardMax || 0);
+  const totalBudget = Number(profile.totalBudget || routePlan.budgetModel?.totalBudget || 0);
+  (routePlan.variants || []).forEach(variant => {
+    const styledCost = scaleCostRange(variant.costRange, travelStyle.costMultiplier);
+    variant.costRange = styledCost;
+    variant.budgetStatus = getBudgetStatus(styledCost, hardMax, totalBudget);
+    if (variant.routeAssessment) {
+      variant.routeAssessment.costRange = styledCost;
+      variant.routeAssessment.styleMultiplier = travelStyle.costMultiplier;
+    }
+  });
+  if (routePlan.primary) {
+    routePlan.primary = (routePlan.variants || []).find(item => item.id === routePlan.primary.id) || routePlan.primary;
+  }
+  routePlan.budgetModel = {
+    ...(routePlan.budgetModel || {}),
+    travelStyle
+  };
+  return routePlan;
+}
+
 function buildRouteExperiment(profile) {
   if (profile.routeGoal !== 'multiCityValue') {
     return null;
@@ -1157,7 +1250,7 @@ function buildRouteExperiment(profile) {
         node('长沙', 1.5, '高密度短停', '夜间体验为主，不安排远郊。', '广州到长沙。'),
         node('武汉', 1.5, '江城短停', '博物馆与江滩二选一。', '长沙到武汉。'),
         node('洛阳', 2, '历史重点', '两天是保住记忆点的最低停留。', '武汉到洛阳。'),
-        node('北京', 4, '主目的地', '北京不能再压缩，否则“必须到”会变成只到过。', '洛阳到北京。'),
+        node('北京', 4, '主目的地', '目的地不能再压缩，否则会变成只到过。', '洛阳到北京。'),
         node('济南', 1, '返程短停', '仅在车次顺、住宿便宜时保留。', '北京到济南。'),
         node('南京', 2, '返程重点', '用博物馆与夜游形成第二个稳定停留。', '济南到南京。'),
         node('杭州', 2, '江南停留', '旺季价格过高时无条件替换为苏州。', '南京到杭州。'),
@@ -1205,7 +1298,7 @@ function buildRouteExperiment(profile) {
   const lodgingCityLimit = Math.max(3, Math.floor(days / 2));
   const primaryStops = primary.nodes.filter(item => item.city !== (profile.origin || '茂名'));
   const shortStayCities = primaryStops
-    .filter(item => Number(item.stay || 0) <= 1 && item.city !== (profile.destination || '北京'))
+    .filter(item => Number(item.stay || 0) <= 1 && item.city !== (profile.destination || '目的地'))
     .map(item => item.city);
   const higherCostCities = primaryStops
     .filter(item => Number.isFinite(Number(item.cost)) && Number(item.cost) < 65)
@@ -1223,18 +1316,18 @@ function buildRouteExperiment(profile) {
     : `预算变紧：${lodgingAdvice}`;
   const shortStayAdvice = shortStayCities.length
     ? `先检查只停 ${shortStayCities.join('、')} 的短停段；若车次不顺就直接删掉，再删与前后体验重复的城市。`
-    : '先删与前后体验重复的城市，不压缩必到城市的完整停留。';
+    : '先删与前后体验重复的城市，不压缩目的地的完整停留。';
   const routeBudgetRisk = routeCities.has('泉州')
     ? `预算日均约 ${budget} 元时，泉州保留在地街区即可，不再叠加周边热门海滨城市的旺季住宿成本。`
     : higherCostCities.length
       ? `预算日均约 ${budget} 元时，${higherCostCities.join('、')}的住宿最需要提前锁价。`
       : `预算日均约 ${budget} 元时，优先控制住宿位置和临时交通溢价。`;
 
-  return {
-    title: '北京必须到，返程有三种走法',
-    summary: '先决定你愿意换多少次住宿，再决定城市数量。三条路线都保留北京，也都避免原路返回。',
+  const routePlan = {
+    title: `从${profile.origin || '出发地'}出发，${profile.destination || '目的地'}之后有三种返程走法`,
+    summary: `先决定你愿意换多少次住宿，再决定城市数量。三条路线都保留${profile.destination || '目的地'}，也都避免原路返回。`,
     origin: profile.origin || '茂名',
-    destination: profile.destination || '北京',
+    destination: profile.destination || '',
     totalDays: days,
     selectedVariantId: primary.id,
     budgetModel: {
@@ -1247,7 +1340,7 @@ function buildRouteExperiment(profile) {
     primary,
     redFlags: [
       `${days} 天内超过 ${lodgingCityLimit} 个住宿城市后，新增城市带来的体验通常低于搬行李和换乘成本。`,
-      '北京住宿和预约是最大风险，先锁北京段，再倒推前后城市。',
+      `${profile.destination || '目的地'}的住宿和预约是最大风险，先锁目的地停留，再倒推前后城市。`,
       routeBudgetRisk,
       '如果连续两段车程超过 5 小时，中间城市必须降级为短停，不要硬塞景点。'
     ],
@@ -1257,6 +1350,7 @@ function buildRouteExperiment(profile) {
       '天气或票务失控：直接切到少搬行李版，不用重新做整份计划。'
     ]
   };
+  return applyTravelStyleToRoutePlan(routePlan, profile);
 }
 
 function diversify(scored, count) {
@@ -1385,5 +1479,7 @@ module.exports = {
   getCityByName,
   buildVector,
   buildRouteExperiment,
-  buildJournalMemory
+  buildJournalMemory,
+  buildTravelStyleModel,
+  applyTravelStyleToRoutePlan
 };

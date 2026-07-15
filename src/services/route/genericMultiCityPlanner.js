@@ -159,7 +159,7 @@ function buildVariant(config, input, candidates, destinationCity) {
   const selected = selectStops(candidates, stopCount);
   const candidateNodes = [
     ...selected.outbound.map(item => ({ candidate: item, phase: '去程', role: '去程完整停留' })),
-    { candidate: { city: destinationCity, utility: 1 }, phase: '主目的地', role: '必到主目的地', destination: true },
+    { candidate: { city: destinationCity, utility: 1 }, phase: '主目的地', role: '选定目的地', destination: true },
     ...selected.returning.map(item => ({ candidate: item, phase: '返程', role: '返程完整停留' }))
   ];
 
@@ -196,7 +196,7 @@ function buildVariant(config, input, candidates, destinationCity) {
       stay: item.stay,
       role: item.role,
       reason: item.destination
-        ? `这是你明确要求到达的城市，至少保留 ${item.stay} 天，不把“必到”做成短暂停留。`
+        ? `这是你选定的目的地，至少保留 ${item.stay} 天，不把目的地做成短暂停留。`
         : describeCity(item.candidate, item.phase),
       coordinates: item.candidate.city.coordinates,
       routeUtility: round(item.candidate.utility, 3)
@@ -255,7 +255,9 @@ function buildGenericRouteExperiment(input = {}) {
 
   const normalizedInput = { ...input, origin, destination, days };
   const candidates = buildCandidates(normalizedInput, originCoordinates, destinationCoordinates);
-  if (candidates.length < 2) return null;
+  // A supplemental origin can have only one sensible in-corridor stop in the 32-city set.
+  // Keep the destination contract and vary stays/buffer instead of abandoning the trip.
+  if (candidates.length < 1) return null;
   const countByDays = days <= 14
     ? { steady: 2, balanced: 4, explorer: 6 }
     : days <= 18
@@ -321,8 +323,8 @@ function buildGenericRouteExperiment(input = {}) {
     .slice(0, 2)
     .map(city => city.name))];
   return {
-    title: `${destination}必须到，往返有三种节奏`,
-    summary: '三条路线都保留必到城市，并把去程、返程、预算和换酒店成本放在同一个判断里。',
+    title: `从${origin}出发，${destination}之后有三种返程节奏`,
+    summary: '三条路线都保留你选定的目的地，并把去程、返程、预算和换酒店成本放在同一个判断里。',
     origin,
     destination,
     totalDays: days,
@@ -341,11 +343,11 @@ function buildGenericRouteExperiment(input = {}) {
     redFlags: [
       '通用路线中的距离估算不是车次承诺；填写出发日后应优先完成地图与跨城交通核验。',
       '连续两段超过 5.5 小时，下一站必须至少住两晚，否则旅程会退化成换乘清单。',
-      '必到城市的住宿和预约优先锁定，再倒推前后停留。'
+      '目的地的住宿和预约优先锁定，再倒推前后停留。'
     ],
     cutPlan: [
       '先删只住 1 晚、且与前后体验重复的城市。',
-      expensiveCities.length ? `预算变紧时，先检查 ${expensiveCities.join('、')} 的住宿段，不动必到城市。` : '预算变紧时，先压缩住宿溢价，不动必到城市。',
+      expensiveCities.length ? `预算变紧时，先检查 ${expensiveCities.join('、')} 的住宿段，不动目的地停留。` : '预算变紧时，先压缩住宿溢价，不动目的地停留。',
       '任一关键交通段无法核验时，直接切到少搬行李版，不重新推翻整趟计划。'
     ]
   };

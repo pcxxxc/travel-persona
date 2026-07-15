@@ -135,9 +135,10 @@
                 total.max += Number(leg.live.fareCny.max);
                 return total;
               }, { min: 0, max: 0 });
+              var styleMultiplier = Number(result.multiCityPlan.budgetModel?.travelStyle?.costMultiplier || 1);
               assessment.costRange = {
-                min: Math.round((Number(assessment.localBaseCost || 0) * 0.86 + assessment.transportFare.min) / 100) * 100,
-                max: Math.round((Number(assessment.localBaseCost || 0) * 1.18 + assessment.transportFare.max) / 100) * 100
+                min: Math.round((Number(assessment.localBaseCost || 0) * styleMultiplier * 0.86 + assessment.transportFare.min) / 100) * 100,
+                max: Math.round((Number(assessment.localBaseCost || 0) * styleMultiplier * 1.18 + assessment.transportFare.max) / 100) * 100
               };
               selectedVariant.costRange = assessment.costRange;
               var ceiling = Number(result.multiCityPlan.budgetModel?.hardMax || result.multiCityPlan.budgetModel?.totalBudget || 0);
@@ -186,6 +187,29 @@
       seen[tip] = true;
       return true;
     }).slice(0, 2);
+  }
+
+  function renderTravelStyleStrategy(style) {
+    if (!style || !style.label) return null;
+    var rows = [
+      { label: '住宿', value: style.stay },
+      { label: '餐饮', value: style.dining },
+      { label: '体验', value: style.experiences }
+    ].filter(function (item) { return item.value; });
+    return el('section', { className: 'route-style-plan', 'aria-label': '本次旅行消费策略' }, [
+      el('div', { className: 'route-style-plan__heading' }, [
+        el('div', {}, [
+          el('span', { className: 'route-style-plan__eyebrow', textContent: '本次消费策略' }),
+          el('h3', { textContent: style.label }),
+          el('p', { textContent: style.summary || '' })
+        ]),
+        style.status ? el('span', { className: 'tag', textContent: style.status }) : null
+      ]),
+      el('dl', { className: 'route-style-plan__rows' }, rows.flatMap(function (item) {
+        return [el('dt', { textContent: item.label }), el('dd', { textContent: item.value })];
+      })),
+      style.budgetNote ? el('p', { className: 'route-style-plan__note', textContent: style.budgetNote }) : null
+    ]);
   }
 
   // ============================================================
@@ -269,6 +293,9 @@
         el('div', {}, [el('strong', { textContent: String(selected.bufferDays || 0) }), el('span', { textContent: '机动天数' })])
       ])
     ]));
+
+    var styleStrategy = renderTravelStyleStrategy(plan.budgetModel?.travelStyle);
+    if (styleStrategy) section.appendChild(styleStrategy);
 
     if (hardMax && Number(cost.min) > hardMax) {
       section.appendChild(el('div', { className: 'route-budget-callout route-budget-callout--danger', role: 'alert' }, [
@@ -366,6 +393,7 @@
     buildMapEnrichmentRequest: buildMapEnrichmentRequest,
     applyMapEnrichment: applyMapEnrichment,
     getCriticalNodeTips: getCriticalNodeTips,
+    renderTravelStyleStrategy: renderTravelStyleStrategy,
     renderMultiCityPlan: renderMultiCityPlan
   };
 

@@ -27,6 +27,12 @@
   var INTERESTS = App.INTERESTS;
   var AVOIDS = App.AVOIDS;
   var COMPANIONS = App.COMPANIONS;
+  var TRAVEL_STYLES = [
+    { key: 'value', label: '性价比优先', desc: '交通便利的经济住宿、本地餐饮和免费或低价体验。' },
+    { key: 'balanced', label: '舒适平衡', desc: '稳定舒适的住宿、口碑餐厅和经典体验的平衡。' },
+    { key: 'depth', label: '深度体验', desc: '特色住宿、更完整的文化体验和少一点赶路。' },
+    { key: 'premium', label: '品质享受', desc: '更好的房间、预约型餐饮和高品质的体验配额。' }
+  ];
 
   function scrollPageToTop() {
     global.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -437,6 +443,8 @@
     ]);
     section.appendChild(timingGrid);
 
+    section.appendChild(renderTravelStylePicker(ctx));
+
     section.appendChild(el('div', { className: 'sampling-subsection' }, [
       el('h3', { className: 'sampling-subtitle', textContent: '这趟旅行的总预算' }),
       el('p', { className: 'sampling-note', textContent: '舒适预算用于体验基线；最高上限会淘汰明显超支方案，区间跨线时会明确提示。' })
@@ -490,6 +498,38 @@
     return section;
   }
 
+  function renderTravelStylePicker(ctx) {
+    var current = ctx.travelStyle || 'balanced';
+    var grid = el('div', { className: 'sampling-subsection' }, [
+      el('h3', { className: 'sampling-subtitle', textContent: '这趟旅行想把钱花在哪里？' }),
+      el('p', { className: 'sampling-note', textContent: '它会同时调整住宿、餐饮和体验的建议档位；预算上限始终优先。' })
+    ]);
+    var choices = el('div', { className: 'travel-style-grid', role: 'radiogroup', 'aria-label': '旅行风格' });
+    TRAVEL_STYLES.forEach(function (style) {
+      var selected = current === style.key;
+      choices.appendChild(el('button', {
+        type: 'button',
+        className: 'travel-style-option' + (selected ? ' travel-style-option--selected' : ''),
+        role: 'radio',
+        'aria-checked': selected ? 'true' : 'false',
+        dataset: { travelStyle: style.key },
+        onClick: function () {
+          ctx.travelStyle = style.key;
+          choices.querySelectorAll('.travel-style-option').forEach(function (item) {
+            var isSelected = item.dataset.travelStyle === style.key;
+            item.classList.toggle('travel-style-option--selected', isSelected);
+            item.setAttribute('aria-checked', String(isSelected));
+          });
+        }
+      }, [
+        el('strong', { textContent: style.label }),
+        el('span', { textContent: style.desc })
+      ]));
+    });
+    grid.appendChild(choices);
+    return grid;
+  }
+
   function renderMoneyField(label, placeholder, value, onChange) {
     return el('label', { className: 'field' }, [
       el('span', { className: 'field__label', textContent: label }),
@@ -523,6 +563,7 @@
     renderMoodStep: renderMoodStep,
     renderInterestsStep: renderInterestsStep,
     renderContextStep: renderContextStep,
+    renderTravelStylePicker: renderTravelStylePicker,
     renderMoneyField: renderMoneyField,
     validateContext: validateContext,
     scrollPageToTop: scrollPageToTop,
